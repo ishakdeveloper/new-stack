@@ -21,5 +21,5 @@ export default async function UnauthenticatedLayout({
     redirect("/login");
   }
 
-  return <SocketProvider>{children}</SocketProvider>;
+  return <>{children}</>;
 }

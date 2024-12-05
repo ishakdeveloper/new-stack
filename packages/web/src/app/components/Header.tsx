@@ -1,5 +1,6 @@
 "use client";
 
+import { useSocket } from "@/providers/SocketProvider";
 import { authClient, Session } from "@/utils/authClient";
 import { client } from "@/utils/client";
 import Link from "next/link";
@@ -9,6 +10,7 @@ import { useEffect, useState } from "react";
 export default function Header() {
   const router = useRouter();
   const session = authClient.useSession();
+  const { isConnected } = useSocket();
 
   const handleSignOut = async () => {
     await authClient.signOut({
@@ -24,7 +26,7 @@ export default function Header() {
         <div className="flex justify-between items-center h-16">
           <div className="flex-shrink-0">
             <Link href="/" className="text-xl font-bold text-gray-800">
-              TaskApp
+              {isConnected ? "Connected" : "Disconnected"}
             </Link>
           </div>
 

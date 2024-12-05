@@ -1,3 +1,6 @@
+import { authClient } from "@/utils/authClient";
+import { headers } from "next/headers";
+
 export default async function Home() {
   return (
     <main className="bg-amber-100">

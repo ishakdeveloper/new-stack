@@ -41,79 +41,12 @@ const validateOrigin = (request: Request) => {
 };
 
 export const app = new Elysia()
-  .use(logger())
   .use(
     cors({
       origin: validateOrigin,
     })
   )
   .use(swagger())
-  .use(
-    opentelemetry({
-      spanProcessors: [new BatchSpanProcessor(new OTLPTraceExporter())],
-    })
-  )
-  .ws("/ws", {
-    body: t.Object({
-      type: t.String(),
-      data: t.Any(),
-    }),
-    response: t.Object({
-      type: t.String(),
-      data: t.Any(),
-    }),
-    open(ws) {
-      console.log("opened");
-    },
-    async message(ws, payload) {
-      logWebSocket(payload);
-      try {
-        switch (payload.type) {
-          case "message:send":
-            // ws.send({
-            //   type: "message:send",
-            //   data: payload.data,
-            // });
-
-            break;
-
-          case "room:join":
-            console.log(`User joined room: ${payload.data.roomId}`);
-            ws.subscribe(payload.data.roomId);
-            ws.publish(payload.data.roomId, {
-              type: "room:update",
-              data: {
-                roomId: payload.data.roomId,
-                user: payload.data.user,
-              },
-            });
-            break;
-          case "room:leave":
-            console.log(`User left room: ${payload.data.roomId}`);
-            ws.unsubscribe(payload.data.roomId);
-            ws.publish(payload.data.roomId, {
-              type: "room:update",
-              data: {
-                roomId: payload.data.roomId,
-                user: payload.data.user,
-              },
-            });
-
-            ws.send({
-              type: "room:update",
-              data: payload.data,
-            });
-            break;
-        }
-      } catch (error) {
-        console.error("error parsing message", error);
-        return;
-      }
-    },
-    close(ws) {
-      console.log("closed");
-    },
-  })
   .group("/api", (app) =>
     app.use(taskRoutes).use(authRoutes).use(messageRoutes).use(roomRoutes)
   )

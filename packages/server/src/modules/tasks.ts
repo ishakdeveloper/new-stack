@@ -1,6 +1,6 @@
 import { Elysia, t } from "elysia";
 import db from "../database/db";
-import { tasksTable, user } from "../database/schema";
+import { tasksTable } from "../database/schema";
 import { and, eq } from "drizzle-orm";
 import { createTaskSchema, readTaskSchema } from "../database/schema/";
 import { userMiddleware } from "../middlewares/userMiddleware";

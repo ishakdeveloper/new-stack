@@ -12,6 +12,7 @@ export default function RegisterPage() {
   } = useForm();
 
   const onSubmit = async (data: any) => {
+    console.log(data);
     const { data: signUpData, error } = await authClient.signUp.email({
       email: data.email,
       password: data.password,

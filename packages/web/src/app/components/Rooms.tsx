@@ -65,15 +65,6 @@ export default function Rooms() {
           data: updatedRooms,
         };
       });
-
-      socket?.send({
-        type: "room:join",
-        data: {
-          // @ts-ignore
-          roomId: data.data?.[0]?.roomId,
-          user: session?.data?.user,
-        },
-      });
     },
   });
 
@@ -93,33 +84,6 @@ export default function Rooms() {
 
   useEffect(() => {
     if (!socket) return;
-    const handleSocketMessage = async (message: {
-      data: { type: string; data: any };
-    }) => {
-      console.log(message);
-
-      if (message.data.type === "room:update") {
-        console.log("room:update", message.data);
-        queryClient.setQueryData(["rooms"], (old: any) => {
-          return {
-            ...old,
-            data: old.data.map((room: any) => ({
-              ...room,
-            })),
-          };
-        });
-      }
-
-      if (message.data.type === "room:join") {
-        socket.subscribe(message.data.data.roomId);
-      }
-    };
-
-    socket?.on("message", handleSocketMessage);
-
-    return () => {
-      socket?.off("message", handleSocketMessage);
-    };
   }, [socket, queryClient]);
 
   return (

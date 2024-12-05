@@ -14,10 +14,54 @@ defmodule WS.UserSession do
   @impl true
   def init({user_id, ws_pid}) do
     PubSub.subscribe("user:#{user_id}")
-    {:ok, %{user_id: user_id, ws_pid: ws_pid, room_id: nil}}
+    {:ok, %{user_id: user_id, ws_pid: ws_pid, room_id: nil, online: true}}
   end
 
   # Public API
+
+    @doc """
+  Marks the user as online and notifies all subscribed guilds/rooms.
+  """
+  def mark_online(user_id) do
+    if GenServer.whereis(via_tuple(user_id)) do
+      GenServer.cast(via_tuple(user_id), :online)
+    else
+      {:error, :not_found}
+    end
+  end
+
+  @doc """
+  Marks the user as offline and notifies all subscribed guilds/rooms.
+  """
+  def mark_offline(user_id) do
+    if GenServer.whereis(via_tuple(user_id)) do
+      GenServer.cast(via_tuple(user_id), :offline)
+    else
+      {:error, :not_found}
+    end
+  end
+
+    @doc """
+  Registers a user session (if the user reconnects, reuse their session).
+  """
+  def register_user(user_id, ws_pid) do
+    case GenServer.whereis(via_tuple(user_id)) do
+      nil ->
+        # Create a new session if it doesn't exist
+        SessionSupervisor.start_session(user_id, ws_pid)
+
+      pid ->
+        # Reuse the existing session and update the WebSocket PID
+        GenServer.call(pid, {:update_ws_pid, ws_pid})
+    end
+  end
+
+  @doc """
+  Unregisters a user by marking them offline.
+  """
+  def unregister_user(user_id) do
+    mark_offline(user_id)
+  end
 
   def join_room(user_id, room_id) do
     GenServer.call(via_tuple(user_id), {:join_room, room_id})
@@ -27,8 +71,15 @@ defmodule WS.UserSession do
     GenServer.cast(via_tuple(user_id), {:send_message, message})
   end
 
-  def send_private_message(sender_id, recipient_id, message) do
-    GenServer.cast(via_tuple(recipient_id), {:private_message, sender_id, message})
+  def send_private_message(from_user_id, to_user_id, message) do
+    case Registry.lookup(WS.SocketRegistry, to_user_id) do
+      [{recipient_pid, _meta}] ->
+        GenServer.cast(recipient_pid, {:private_message, from_user_id, message})
+        :ok
+
+      [] ->
+        {:error, :not_found}
+    end
   end
 
   # New function: Register a user and start a session
@@ -56,8 +107,8 @@ defmodule WS.UserSession do
   end
 
   @impl true
-  def handle_cast({:private_message, sender_id, message}, %{ws_pid: ws_pid} = state) do
-    send(ws_pid, {:private_message, sender_id, message})
+  def handle_cast({:private_message, from_user_id, message}, %{ws_pid: ws_pid} = state) do
+    send(ws_pid, {:private_message, from_user_id, message})
     {:noreply, state}
   end
 
@@ -119,5 +170,18 @@ defmodule WS.SessionSupervisor do
   """
   def send_private_message(sender_id, recipient_id, message) do
     WS.UserSession.send_private_message(sender_id, recipient_id, message)
+  end
+
+  defp notify_guilds_and_rooms(user_id, status) do
+    # Notify all guilds and rooms the user belongs to
+    user_guilds = Guild.get_user_guilds(user_id)
+    Enum.each(user_guilds, fn guild_id ->
+      PubSub.broadcast("guild:#{guild_id}", %{user_id: user_id, status: status})
+    end)
+
+    user_rooms = Room.get_user_rooms(user_id)
+    Enum.each(user_rooms, fn room_id ->
+      PubSub.broadcast("room:#{room_id}", %{user_id: user_id, status: status})
+    end)
   end
 end

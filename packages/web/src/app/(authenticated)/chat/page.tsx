@@ -1,4 +1,5 @@
 import Chat from "@/app/components/Chat";
+import { GlobalChatbox } from "@/app/components/ChatBox";
 import { authClient } from "@/utils/authClient";
 import { client } from "@/utils/client";
 import {
@@ -19,7 +20,7 @@ export default async function ChatPage() {
   const queryClient = new QueryClient();
 
   await queryClient.prefetchQuery({
-    queryKey: ["messages", session?.data?.user?.id],
+    queryKey: ["messages"],
     queryFn: () =>
       JSON.stringify(
         client.api.messages.get({
@@ -29,10 +30,10 @@ export default async function ChatPage() {
   });
 
   return (
-    <main>
+    <main className="max-w-5xl mx-auto h-[calc(100vh-8rem)]">
       <h1 className="text-2xl font-bold">Chat</h1>
       <HydrationBoundary state={dehydrate(queryClient)}>
-        {/* <Chat roomId={session?.data?.user?.id ?? ""} /> */}
+        <GlobalChatbox />
       </HydrationBoundary>
     </main>
   );

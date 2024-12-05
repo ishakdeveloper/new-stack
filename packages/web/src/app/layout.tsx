@@ -4,6 +4,7 @@ import Header from "./components/Header";
 import { client } from "@/utils/client";
 import { headers } from "next/headers";
 import { authClient } from "@/utils/authClient";
+import { SocketProvider } from "@/providers/SocketProvider";
 
 export const metadata = {
   title: "Create Next App",
@@ -25,8 +26,10 @@ export default async function RootLayout({
     <html lang="en">
       <body className="">
         <QueryProvider>
-          <Header />
-          {children}
+          <SocketProvider session={session?.data}>
+            <Header />
+            {children}
+          </SocketProvider>
         </QueryProvider>
       </body>
     </html>

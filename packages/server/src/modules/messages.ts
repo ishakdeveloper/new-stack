@@ -1,11 +1,6 @@
 import Elysia, { t } from "elysia";
 import db from "../database/db";
-import {
-  messages,
-  readMessageSchema,
-  user,
-  userSchema,
-} from "../database/schema";
+import { messages, readMessageSchema, userSchema } from "../database/schema";
 import { eq } from "drizzle-orm";
 import { userMiddleware } from "../middlewares/userMiddleware";
 import { app } from "..";
