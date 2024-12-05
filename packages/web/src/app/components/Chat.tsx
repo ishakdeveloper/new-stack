@@ -43,7 +43,6 @@ export default function Chat({ roomId }: { roomId: string }) {
       ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["rooms"] });
-      queryClient.invalidateQueries({ queryKey: ["users", roomId] });
 
       socket?.send({
         type: "room:leave",
@@ -81,11 +80,6 @@ export default function Chat({ roomId }: { roomId: string }) {
   };
 
   useEffect(() => {
-    console.log("users:", initialUsers);
-    console.log("room:", roomData);
-  }, [initialUsers, roomData]);
-
-  useEffect(() => {
     scrollToBottom();
   }, [initialMessages]);
 
@@ -111,27 +105,31 @@ export default function Chat({ roomId }: { roomId: string }) {
       }
 
       if (type === "room:join") {
-        queryClient.invalidateQueries({ queryKey: ["users", roomId] });
+        queryClient.setQueryData(["users", roomId], (old: any) => {
+          return {
+            ...old,
+            data: [...old.data, data.data.user],
+          };
+        });
       }
 
       if (type === "room:leave") {
         console.log("User left room", data);
-        queryClient.invalidateQueries({ queryKey: ["users", roomId] });
+        queryClient.setQueryData(["users", roomId], (old: any) => {
+          return {
+            ...old,
+            data: old.data.filter((user: any) => user.id !== data.data.user.id),
+          };
+        });
       }
     };
-
-    // Join the room and attach the listener
-    socket.send({
-      type: "room:join",
-      data: { roomId },
-    });
 
     socket.on("message", handleMessage);
 
     return () => {
       socket.off("message", handleMessage);
     };
-  }, [socket, queryClient]);
+  }, [socket, roomId, queryClient]);
 
   // Handle message submission
   const handleSubmit = (e: React.FormEvent) => {

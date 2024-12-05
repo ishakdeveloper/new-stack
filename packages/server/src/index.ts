@@ -18,6 +18,7 @@ import {
   readMessageSchema,
 } from "./database/schema";
 import { roomRoutes } from "./modules/rooms";
+import { logger, logWebSocket } from "@lenoux01/lean-logs";
 
 const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(",") || [];
 
@@ -39,7 +40,8 @@ const validateOrigin = (request: Request) => {
   return false;
 };
 
-const app = new Elysia()
+export const app = new Elysia()
+  .use(logger())
   .use(
     cors({
       origin: validateOrigin,
@@ -64,30 +66,25 @@ const app = new Elysia()
       console.log("opened");
     },
     async message(ws, payload) {
+      logWebSocket(payload);
       try {
         switch (payload.type) {
           case "message:send":
-            console.log("message:send", payload);
-            ws.publish(payload.data.roomId, {
-              type: "message:send",
-              data: payload.data,
-            });
-
-            ws.send({
-              type: "message:send",
-              data: payload.data,
-            });
+            // ws.send({
+            //   type: "message:send",
+            //   data: payload.data,
+            // });
 
             break;
 
           case "room:join":
-            console.log(`User joined room: ${payload.data}`);
-            ws.subscribe(payload.data.roomId); // Explicit subscription
+            console.log(`User joined room: ${payload.data.roomId}`);
+            ws.subscribe(payload.data.roomId);
             ws.publish(payload.data.roomId, {
               type: "room:update",
               data: {
                 roomId: payload.data.roomId,
-                userCount: payload.data.userCount,
+                user: payload.data.user,
               },
             });
             break;
@@ -98,8 +95,13 @@ const app = new Elysia()
               type: "room:update",
               data: {
                 roomId: payload.data.roomId,
-                userCount: payload.data.userCount,
+                user: payload.data.user,
               },
+            });
+
+            ws.send({
+              type: "room:update",
+              data: payload.data,
             });
             break;
         }

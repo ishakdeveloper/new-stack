@@ -41,18 +41,37 @@ export default function Rooms() {
           query: { userId: session?.data?.user?.id ?? "" },
         }
       ),
-    onSuccess: (data) => {
-      // queryClient.invalidateQueries({ queryKey: ["rooms"] });
-      console.log(data);
-      // @ts-ignore
-      // router.push(`/rooms/${data.data?.[0]?.roomId}`);
+    onSuccess: (data, roomId) => {
+      queryClient.setQueryData(["rooms"], (old: any) => {
+        if (!old) return old;
+
+        const updatedRooms = old.data.map((room: any) =>
+          room.id === roomId
+            ? {
+                ...room,
+                users: [
+                  ...(room.users || []),
+                  {
+                    userId: session?.data?.user?.id,
+                    name: session?.data?.user?.name,
+                  },
+                ],
+              }
+            : room
+        );
+
+        return {
+          ...old,
+          data: updatedRooms,
+        };
+      });
 
       socket?.send({
         type: "room:join",
-        // @ts-ignore
         data: {
           // @ts-ignore
           roomId: data.data?.[0]?.roomId,
+          user: session?.data?.user,
         },
       });
     },
@@ -77,10 +96,10 @@ export default function Rooms() {
     const handleSocketMessage = async (message: {
       data: { type: string; data: any };
     }) => {
-      if (
-        message.data.type === "room:join" ||
-        message.data.type === "room:leave"
-      ) {
+      console.log(message);
+
+      if (message.data.type === "room:update") {
+        console.log("room:update", message.data);
         queryClient.setQueryData(["rooms"], (old: any) => {
           return {
             ...old,
@@ -89,10 +108,10 @@ export default function Rooms() {
             })),
           };
         });
+      }
 
-        if (message.data.type === "room:join") {
-          socket.subscribe(message.data.data.roomId);
-        }
+      if (message.data.type === "room:join") {
+        socket.subscribe(message.data.data.roomId);
       }
     };
 

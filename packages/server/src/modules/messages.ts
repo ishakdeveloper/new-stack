@@ -8,6 +8,7 @@ import {
 } from "../database/schema";
 import { eq } from "drizzle-orm";
 import { userMiddleware } from "../middlewares/userMiddleware";
+import { app } from "..";
 
 export const messageRoutes = new Elysia()
   .derive(({ request }) => userMiddleware(request))
@@ -49,6 +50,14 @@ export const messageRoutes = new Elysia()
       if (!messageWithUser) {
         throw new Error("Failed to fetch message with user data");
       }
+
+      app.server?.publish(
+        roomId ?? "",
+        JSON.stringify({
+          type: "message:send",
+          data: messageWithUser,
+        })
+      );
 
       return messageWithUser;
     },

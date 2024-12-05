@@ -80,4 +80,10 @@ export const roomRoutes = new Elysia()
     return db
       .delete(roomUsers)
       .where(and(eq(roomUsers.roomId, id), eq(roomUsers.userId, userId ?? "")));
-  });
+    },
+    {
+      query: t.Object({
+        userId: t.String(),
+      }),
+    }
+  );
