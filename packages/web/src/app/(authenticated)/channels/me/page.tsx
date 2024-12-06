@@ -5,12 +5,9 @@ import ConversationSidebar from "./components/ConversationSidebar";
 
 export default function MePage() {
   return (
-    <div className="flex">
-      <ConversationSidebar />
+    <>
       <FriendsList />
-      <div className="flex-grow">
-        <ActivitySidebar />
-      </div>
-    </div>
+      <ActivitySidebar />
+    </>
   );
 }

@@ -9,7 +9,7 @@ const responseSchema = t.Object({
 
 export const authRoutes = new Elysia()
   .derive(({ request }) => userMiddleware(request))
-  .get("/auth/me", async ({ request }) => {
+  .get("/auth/me", async ({ request, user }) => {
     const session = await auth.api.getSession({ headers: request.headers });
     return {
       user: session?.user,

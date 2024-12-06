@@ -12,6 +12,15 @@ import { ClientToServerEvents, ServerToClientEvents } from "./types";
 import db from "./database/db";
 
 import { logger, logWebSocket } from "@lenoux01/lean-logs";
+import { guildRoutes } from "./modules/guilds";
+import { inviteRoutes } from "./modules/invite";
+import { friendshipRoutes } from "./modules/friends";
+import {
+  directMessageRoutes,
+  groupDmRoutes,
+  guildChannelRoutes,
+} from "./modules/messages";
+import { channelRoutes } from "./modules/channels";
 
 const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(",") || [];
 
@@ -40,7 +49,17 @@ export const app = new Elysia()
     })
   )
   .use(swagger())
-  .group("/api", (app) => app.use(authRoutes))
+  .group("/api", (app) =>
+    app
+      .use(authRoutes)
+      .use(guildRoutes)
+      .use(inviteRoutes)
+      .use(friendshipRoutes)
+      .use(directMessageRoutes)
+      .use(guildChannelRoutes)
+      .use(groupDmRoutes)
+      .use(channelRoutes)
+  )
   .all("/api/auth/*", betterAuthView)
   .listen(4000);
 

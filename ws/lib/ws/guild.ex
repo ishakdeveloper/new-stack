@@ -3,6 +3,16 @@ defmodule WS.Guild do
 
   alias WS.PubSub
 
+  defstruct guild_id: nil,
+            users: [],
+            rooms: []
+
+  @type t :: %__MODULE__{
+          guild_id: String.t(),
+          users: [String.t()],
+          rooms: [String.t()]
+        }
+
   def start_link(guild_id) do
     GenServer.start_link(__MODULE__, %{guild_id: guild_id, users: [], rooms: []}, name: via_tuple(guild_id))
   end

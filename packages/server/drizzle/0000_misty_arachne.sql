@@ -62,6 +62,21 @@ CREATE TABLE IF NOT EXISTS "channels" (
 	"updatedAt" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "dm_channel_users" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"channelId" uuid NOT NULL,
+	"userId" text NOT NULL,
+	"joinedAt" timestamp DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "dm_channels" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"name" text,
+	"isGroup" boolean DEFAULT false NOT NULL,
+	"createdBy" text NOT NULL,
+	"createdAt" timestamp DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "friendships" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"requesterId" text NOT NULL,
@@ -71,17 +86,17 @@ CREATE TABLE IF NOT EXISTS "friendships" (
 	"updatedAt" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE IF NOT EXISTS "group_dm_users" (
+CREATE TABLE IF NOT EXISTS "guild_invite_links" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"groupDMId" uuid NOT NULL,
-	"userId" text NOT NULL,
-	"createdAt" timestamp DEFAULT now() NOT NULL
-);
---> statement-breakpoint
-CREATE TABLE IF NOT EXISTS "group_dms" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"name" text NOT NULL,
-	"createdAt" timestamp DEFAULT now() NOT NULL
+	"guildId" uuid NOT NULL,
+	"inviterId" text NOT NULL,
+	"inviteCode" varchar(8) NOT NULL,
+	"maxUses" integer,
+	"uses" integer DEFAULT 0,
+	"status" varchar(20) DEFAULT 'active' NOT NULL,
+	"createdAt" timestamp DEFAULT now() NOT NULL,
+	"expiresAt" timestamp,
+	CONSTRAINT "guild_invite_links_inviteCode_unique" UNIQUE("inviteCode")
 );
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "guild_users" (
@@ -100,13 +115,18 @@ CREATE TABLE IF NOT EXISTS "guilds" (
 	"ownerId" text NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "invite_link_usages" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"inviteLinkId" uuid NOT NULL,
+	"invitedUserId" text NOT NULL,
+	"usedAt" timestamp DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "messages" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"text" text NOT NULL,
 	"senderId" text NOT NULL,
 	"channelId" uuid,
-	"groupDMId" uuid,
-	"recipientId" text,
 	"createdAt" timestamp DEFAULT now() NOT NULL,
 	"updatedAt" timestamp DEFAULT now() NOT NULL
 );
@@ -144,6 +164,24 @@ EXCEPTION
 END $$;
 --> statement-breakpoint
 DO $$ BEGIN
+ ALTER TABLE "dm_channel_users" ADD CONSTRAINT "dm_channel_users_channelId_dm_channels_id_fk" FOREIGN KEY ("channelId") REFERENCES "public"."dm_channels"("id") ON DELETE no action ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "dm_channel_users" ADD CONSTRAINT "dm_channel_users_userId_user_id_fk" FOREIGN KEY ("userId") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "dm_channels" ADD CONSTRAINT "dm_channels_createdBy_user_id_fk" FOREIGN KEY ("createdBy") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
  ALTER TABLE "friendships" ADD CONSTRAINT "friendships_requesterId_user_id_fk" FOREIGN KEY ("requesterId") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;
 EXCEPTION
  WHEN duplicate_object THEN null;
@@ -156,13 +194,13 @@ EXCEPTION
 END $$;
 --> statement-breakpoint
 DO $$ BEGIN
- ALTER TABLE "group_dm_users" ADD CONSTRAINT "group_dm_users_groupDMId_group_dms_id_fk" FOREIGN KEY ("groupDMId") REFERENCES "public"."group_dms"("id") ON DELETE no action ON UPDATE no action;
+ ALTER TABLE "guild_invite_links" ADD CONSTRAINT "guild_invite_links_guildId_guilds_id_fk" FOREIGN KEY ("guildId") REFERENCES "public"."guilds"("id") ON DELETE no action ON UPDATE no action;
 EXCEPTION
  WHEN duplicate_object THEN null;
 END $$;
 --> statement-breakpoint
 DO $$ BEGIN
- ALTER TABLE "group_dm_users" ADD CONSTRAINT "group_dm_users_userId_user_id_fk" FOREIGN KEY ("userId") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;
+ ALTER TABLE "guild_invite_links" ADD CONSTRAINT "guild_invite_links_inviterId_user_id_fk" FOREIGN KEY ("inviterId") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;
 EXCEPTION
  WHEN duplicate_object THEN null;
 END $$;
@@ -192,25 +230,25 @@ EXCEPTION
 END $$;
 --> statement-breakpoint
 DO $$ BEGIN
+ ALTER TABLE "invite_link_usages" ADD CONSTRAINT "invite_link_usages_inviteLinkId_guild_invite_links_id_fk" FOREIGN KEY ("inviteLinkId") REFERENCES "public"."guild_invite_links"("id") ON DELETE no action ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "invite_link_usages" ADD CONSTRAINT "invite_link_usages_invitedUserId_user_id_fk" FOREIGN KEY ("invitedUserId") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
  ALTER TABLE "messages" ADD CONSTRAINT "messages_senderId_user_id_fk" FOREIGN KEY ("senderId") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;
 EXCEPTION
  WHEN duplicate_object THEN null;
 END $$;
 --> statement-breakpoint
 DO $$ BEGIN
- ALTER TABLE "messages" ADD CONSTRAINT "messages_channelId_channels_id_fk" FOREIGN KEY ("channelId") REFERENCES "public"."channels"("id") ON DELETE no action ON UPDATE no action;
-EXCEPTION
- WHEN duplicate_object THEN null;
-END $$;
---> statement-breakpoint
-DO $$ BEGIN
- ALTER TABLE "messages" ADD CONSTRAINT "messages_groupDMId_group_dms_id_fk" FOREIGN KEY ("groupDMId") REFERENCES "public"."group_dms"("id") ON DELETE no action ON UPDATE no action;
-EXCEPTION
- WHEN duplicate_object THEN null;
-END $$;
---> statement-breakpoint
-DO $$ BEGIN
- ALTER TABLE "messages" ADD CONSTRAINT "messages_recipientId_user_id_fk" FOREIGN KEY ("recipientId") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;
+ ALTER TABLE "messages" ADD CONSTRAINT "messages_channelId_dm_channels_id_fk" FOREIGN KEY ("channelId") REFERENCES "public"."dm_channels"("id") ON DELETE no action ON UPDATE no action;
 EXCEPTION
  WHEN duplicate_object THEN null;
 END $$;

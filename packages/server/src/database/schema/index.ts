@@ -3,6 +3,7 @@ import { user } from "./auth";
 
 import {
   boolean,
+  integer,
   pgTable,
   text,
   timestamp,
@@ -58,6 +59,28 @@ export const channels = pgTable("channels", {
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
 });
 
+export const dmChannels = pgTable("dm_channels", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  name: text("name"), // Optional for group DMs
+  isGroup: boolean("isGroup").notNull().default(false), // True for group DMs
+  createdBy: text("createdBy")
+    .notNull()
+    .references(() => user.id), // Creator of the DM or group DM
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+});
+
+// DM Channel Users Table (Many-to-Many)
+export const dmChannelUsers = pgTable("dm_channel_users", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  channelId: uuid("channelId")
+    .notNull()
+    .references(() => dmChannels.id), // DM/Group DM this user is part of
+  userId: text("userId")
+    .notNull()
+    .references(() => user.id), // User in the DM or group
+  joinedAt: timestamp("joinedAt").notNull().defaultNow(),
+});
+
 export const roles = pgTable("roles", {
   id: uuid("id").defaultRandom().primaryKey(),
   name: text("name").notNull(), // Role name
@@ -82,25 +105,6 @@ export const friendships = pgTable("friendships", {
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
 });
 
-// Group DMs Table
-export const groupDMs = pgTable("group_dms", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  name: text("name").notNull(), // Group DM name
-  createdAt: timestamp("createdAt").notNull().defaultNow(),
-});
-
-// Group DM Users Table (Many-to-Many)
-export const groupDMUsers = pgTable("group_dm_users", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  groupDMId: uuid("groupDMId")
-    .notNull()
-    .references(() => groupDMs.id),
-  userId: text("userId")
-    .notNull()
-    .references(() => user.id),
-  createdAt: timestamp("createdAt").notNull().defaultNow(),
-});
-
 // Messages Table
 export const messages = pgTable("messages", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -108,19 +112,60 @@ export const messages = pgTable("messages", {
   senderId: text("senderId")
     .notNull()
     .references(() => user.id), // Sender of the message
-  channelId: uuid("channelId").references(() => channels.id), // For Guild messages
-  groupDMId: uuid("groupDMId").references(() => groupDMs.id), // For Group DMs
-  recipientId: text("recipientId").references(() => user.id), // For 1-on-1 DMs
+  channelId: uuid("channelId").references(() => dmChannels.id),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
 });
 
+export const guildInviteLinks = pgTable("guild_invite_links", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  guildId: uuid("guildId")
+    .notNull()
+    .references(() => guilds.id),
+  inviterId: text("inviterId")
+    .notNull()
+    .references(() => user.id), // User who created the invite
+  inviteCode: varchar("inviteCode", { length: 8 }).notNull().unique(), // Unique code
+  maxUses: integer("maxUses"), // Optional: maximum allowed uses
+  uses: integer("uses").default(0), // Tracks how many times the link has been used
+  status: varchar("status", { length: 20 }).notNull().default("active"), // e.g., active, expired
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  expiresAt: timestamp("expiresAt"), // Optional: expiration time for the link
+});
+
+export const inviteLinkUsages = pgTable("invite_link_usages", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  inviteLinkId: uuid("inviteLinkId")
+    .notNull()
+    .references(() => guildInviteLinks.id), // Reference to the invite link
+  invitedUserId: text("invitedUserId")
+    .notNull()
+    .references(() => user.id), // User who used the invite link
+  usedAt: timestamp("usedAt").notNull().defaultNow(), // Time of usage
+});
+
+export const guildInviteLinksRelations = relations(
+  guildInviteLinks,
+  ({ one, many }) => ({
+    guild: one(guilds), // Invite belongs to a guild
+    inviter: one(user), // Invite was created by a user
+    usages: many(inviteLinkUsages), // Tracks all usages of this invite link
+  })
+);
+
+export const inviteLinkUsagesRelations = relations(
+  inviteLinkUsages,
+  ({ one }) => ({
+    inviteLink: one(guildInviteLinks), // Tracks which invite link was used
+    invitedUser: one(user), // Tracks which user used the invite
+  })
+);
 // User Relationships
-export const userRelations = relations(user, ({ many }) => ({
-  guilds: many(guildUsers),
-  messagesSent: many(messages), // Automatically connects via senderId foreign key
-  dmsReceived: many(messages), // Automatically connects via recipientId foreign key
-  groupDMs: many(groupDMUsers), // Automatically connects via userId foreign key
+export const userRelations = relations(user, ({ many, one }) => ({
+  guildUsers: many(guildUsers), // Users can join multiple guilds through this table
+  ownedGuilds: many(guilds, { relationName: "ownedGuilds" }), // Guilds where the user is the owner
+  messagesSent: many(messages), // Messages the user has sent
+  dmChannels: many(dmChannelUsers), // Direct Messages or Group DMs the user is a part of
   sentFriendRequests: many(friendships, { relationName: "sentFriendRequests" }),
   receivedFriendRequests: many(friendships, {
     relationName: "receivedFriendRequests",
@@ -128,11 +173,16 @@ export const userRelations = relations(user, ({ many }) => ({
 }));
 
 // Guild Relationships
-export const guildRelations = relations(guilds, ({ many, one }) => ({
-  owner: one(user), // Automatically connects via ownerId
-  users: many(guildUsers), // Connects via guildId in guildUsers
-  categories: many(categories), // Connects via guildId in categories
-  roles: many(roles), // Guild can have multiple roles
+export const guildRelations = relations(guilds, ({ one, many }) => ({
+  owner: one(user, {
+    fields: [guilds.ownerId],
+    references: [user.id],
+    relationName: "guildOwner",
+  }), // The owner of the guild
+  members: many(guildUsers), // Users participating in the guild
+  categories: many(categories), // Categories within the guild
+  roles: many(roles), // Roles available in the guild
+  inviteLinks: many(guildInviteLinks), // Invite links created for the guild
 }));
 
 // Update Guild-User Relationships
@@ -154,24 +204,11 @@ export const channelsRelations = relations(channels, ({ many, one }) => ({
   messages: many(messages), // Connects via channelId in messages
 }));
 
-// Group DM Relationships
-export const groupDMRelations = relations(groupDMs, ({ many }) => ({
-  users: many(groupDMUsers), // Connects via groupDMId in groupDMUsers
-  messages: many(messages), // Connects via groupDMId in messages
-}));
-
-// Group DM-User Relationships
-export const groupDMUsersRelations = relations(groupDMUsers, ({ one }) => ({
-  groupDM: one(groupDMs), // Automatically connects via groupDMId
-  user: one(user), // Automatically connects via userId
-}));
-
 // Messages Relationships
 export const messageRelations = relations(messages, ({ one }) => ({
   sender: one(user), // Automatically connects via senderId
   recipient: one(user), // For 1-on-1 DMs, connects via recipientId
   channel: one(channels), // For guild messages, connects via channelId
-  groupDM: one(groupDMs), // For group DMs, connects via groupDMId
 }));
 
 // Role Relationships

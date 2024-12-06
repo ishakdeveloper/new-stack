@@ -1,5 +1,5 @@
 {
-  "id": "ea15c3b5-b2ed-4b51-a40f-fa78530c60ac",
+  "id": "96271e2d-5323-417b-825f-95a8fc84c17e",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -424,6 +424,132 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.dm_channel_users": {
+      "name": "dm_channel_users",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "channelId": {
+          "name": "channelId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "userId": {
+          "name": "userId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "joinedAt": {
+          "name": "joinedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "dm_channel_users_channelId_dm_channels_id_fk": {
+          "name": "dm_channel_users_channelId_dm_channels_id_fk",
+          "tableFrom": "dm_channel_users",
+          "tableTo": "dm_channels",
+          "columnsFrom": [
+            "channelId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "dm_channel_users_userId_user_id_fk": {
+          "name": "dm_channel_users_userId_user_id_fk",
+          "tableFrom": "dm_channel_users",
+          "tableTo": "user",
+          "columnsFrom": [
+            "userId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.dm_channels": {
+      "name": "dm_channels",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "isGroup": {
+          "name": "isGroup",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "createdBy": {
+          "name": "createdBy",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "dm_channels_createdBy_user_id_fk": {
+          "name": "dm_channels_createdBy_user_id_fk",
+          "tableFrom": "dm_channels",
+          "tableTo": "user",
+          "columnsFrom": [
+            "createdBy"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.friendships": {
       "name": "friendships",
       "schema": "",
@@ -504,8 +630,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.group_dm_users": {
-      "name": "group_dm_users",
+    "public.guild_invite_links": {
+      "name": "guild_invite_links",
       "schema": "",
       "columns": {
         "id": {
@@ -515,17 +641,43 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "groupDMId": {
-          "name": "groupDMId",
+        "guildId": {
+          "name": "guildId",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
         },
-        "userId": {
-          "name": "userId",
+        "inviterId": {
+          "name": "inviterId",
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "inviteCode": {
+          "name": "inviteCode",
+          "type": "varchar(8)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "maxUses": {
+          "name": "maxUses",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "uses": {
+          "name": "uses",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "status": {
+          "name": "status",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'active'"
         },
         "createdAt": {
           "name": "createdAt",
@@ -533,16 +685,22 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        },
+        "expiresAt": {
+          "name": "expiresAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {},
       "foreignKeys": {
-        "group_dm_users_groupDMId_group_dms_id_fk": {
-          "name": "group_dm_users_groupDMId_group_dms_id_fk",
-          "tableFrom": "group_dm_users",
-          "tableTo": "group_dms",
+        "guild_invite_links_guildId_guilds_id_fk": {
+          "name": "guild_invite_links_guildId_guilds_id_fk",
+          "tableFrom": "guild_invite_links",
+          "tableTo": "guilds",
           "columnsFrom": [
-            "groupDMId"
+            "guildId"
           ],
           "columnsTo": [
             "id"
@@ -550,12 +708,12 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "group_dm_users_userId_user_id_fk": {
-          "name": "group_dm_users_userId_user_id_fk",
-          "tableFrom": "group_dm_users",
+        "guild_invite_links_inviterId_user_id_fk": {
+          "name": "guild_invite_links_inviterId_user_id_fk",
+          "tableFrom": "guild_invite_links",
           "tableTo": "user",
           "columnsFrom": [
-            "userId"
+            "inviterId"
           ],
           "columnsTo": [
             "id"
@@ -565,40 +723,15 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.group_dms": {
-      "name": "group_dms",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "name": {
-          "name": "name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "createdAt": {
-          "name": "createdAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
+      "uniqueConstraints": {
+        "guild_invite_links_inviteCode_unique": {
+          "name": "guild_invite_links_inviteCode_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "inviteCode"
+          ]
         }
       },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -748,6 +881,72 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.invite_link_usages": {
+      "name": "invite_link_usages",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "inviteLinkId": {
+          "name": "inviteLinkId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "invitedUserId": {
+          "name": "invitedUserId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "usedAt": {
+          "name": "usedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "invite_link_usages_inviteLinkId_guild_invite_links_id_fk": {
+          "name": "invite_link_usages_inviteLinkId_guild_invite_links_id_fk",
+          "tableFrom": "invite_link_usages",
+          "tableTo": "guild_invite_links",
+          "columnsFrom": [
+            "inviteLinkId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "invite_link_usages_invitedUserId_user_id_fk": {
+          "name": "invite_link_usages_invitedUserId_user_id_fk",
+          "tableFrom": "invite_link_usages",
+          "tableTo": "user",
+          "columnsFrom": [
+            "invitedUserId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.messages": {
       "name": "messages",
       "schema": "",
@@ -774,18 +973,6 @@
         "channelId": {
           "name": "channelId",
           "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "groupDMId": {
-          "name": "groupDMId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "recipientId": {
-          "name": "recipientId",
-          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
@@ -819,38 +1006,12 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "messages_channelId_channels_id_fk": {
-          "name": "messages_channelId_channels_id_fk",
+        "messages_channelId_dm_channels_id_fk": {
+          "name": "messages_channelId_dm_channels_id_fk",
           "tableFrom": "messages",
-          "tableTo": "channels",
+          "tableTo": "dm_channels",
           "columnsFrom": [
             "channelId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "messages_groupDMId_group_dms_id_fk": {
-          "name": "messages_groupDMId_group_dms_id_fk",
-          "tableFrom": "messages",
-          "tableTo": "group_dms",
-          "columnsFrom": [
-            "groupDMId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "messages_recipientId_user_id_fk": {
-          "name": "messages_recipientId_user_id_fk",
-          "tableFrom": "messages",
-          "tableTo": "user",
-          "columnsFrom": [
-            "recipientId"
           ],
           "columnsTo": [
             "id"

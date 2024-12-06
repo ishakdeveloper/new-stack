@@ -5,6 +5,7 @@ import { Phone, MessageSquare, Users, PhoneCall, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar } from "@/components/ui/avatar";
+import Link from "next/link";
 
 const friends = [
   { id: 1, name: "John Doe", status: "online" },
@@ -40,29 +41,30 @@ const FriendsList = () => (
     </div>
     <ScrollArea className="flex-grow p-4">
       {friends.map((friend) => (
-        <div
-          key={friend.id}
-          className="flex items-center mb-4 p-2 hover:bg-accent rounded-md"
-        >
-          <Avatar className="h-10 w-10 mr-3">
-            <AvatarFallback>{friend.name[0]}</AvatarFallback>
-          </Avatar>
-          <div className="flex-grow">
-            <div className="font-semibold">{friend.name}</div>
-            <div className="text-sm text-muted-foreground">{friend.status}</div>
+        <Link href={`/channels/me/${friend.id}`} key={friend.id}>
+          <div className="flex items-center mb-4 p-2 hover:bg-accent rounded-md">
+            <Avatar className="h-10 w-10 mr-3">
+              <AvatarFallback>{friend.name[0]}</AvatarFallback>
+            </Avatar>
+            <div className="flex-grow">
+              <div className="font-semibold">{friend.name}</div>
+              <div className="text-sm text-muted-foreground">
+                {friend.status}
+              </div>
+            </div>
+            <div className="flex space-x-2">
+              <Button variant="ghost" size="icon">
+                <MessageSquare className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="icon">
+                <PhoneCall className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="icon">
+                <Video className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
-          <div className="flex space-x-2">
-            <Button variant="ghost" size="icon">
-              <MessageSquare className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon">
-              <PhoneCall className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon">
-              <Video className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
+        </Link>
       ))}
     </ScrollArea>
   </div>

@@ -37,12 +37,10 @@ export const SocketProvider: React.FC<{
   const [socket, setSocket] = useState<WebSocket | null>(null);
   const [isConnected, setIsConnected] = useState<boolean>(false);
 
-  // Function to handle WebSocket connection initialization
   useEffect(() => {
     const ws = new WebSocket("ws://localhost:4001/ws"); // Replace with your WebSocket URL
     setSocket(ws);
 
-    // Listen for open connection
     ws.onopen = () => {
       setIsConnected(true);
       console.log("Connected to WebSocket server");
@@ -52,12 +50,10 @@ export const SocketProvider: React.FC<{
       }
     };
 
-    // Handle WebSocket errors
     ws.onerror = (error) => {
       console.error("WebSocket Error: ", error);
     };
 
-    // Handle WebSocket close event
     ws.onclose = () => {
       setIsConnected(false);
       console.log("WebSocket disconnected");
@@ -68,26 +64,21 @@ export const SocketProvider: React.FC<{
     };
   }, [session]);
 
-  // Function to send a message to the server
   const sendMessage = useCallback(
     (message: WebSocketMessage) => {
       if (socket) {
-        // Check if WebSocket is open before sending message
         if (socket.readyState === WebSocket.OPEN) {
           socket.send(JSON.stringify(message));
         } else {
           console.warn("WebSocket is not open. Queueing message.");
-          // Optionally, you could queue the message and try to send it again when connected.
         }
       }
     },
     [socket] // Ensure the latest socket state is used
   );
 
-  // Check if WebSocket is ready before sending a message
   useEffect(() => {
     if (isConnected && socket) {
-      // Retry sending the message once connected
       if (session) {
         sendMessage({ op: "register", user: session.user });
       }

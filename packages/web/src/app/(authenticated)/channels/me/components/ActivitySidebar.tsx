@@ -1,7 +1,7 @@
 "use client";
 
 const ActivitySidebar = () => (
-  <div className="w-60 border-l p-4">
+  <div className="w-[20rem] border-l p-4">
     <div className="text-sm font-semibold mb-4">Active Now</div>
     <div className="text-center text-muted-foreground mt-10">
       <p>It's quiet for now...</p>

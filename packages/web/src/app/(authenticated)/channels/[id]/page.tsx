@@ -11,7 +11,6 @@ export default async function ChannelPage({
   const { id } = await params;
   return (
     <div className="flex flex-1">
-      {id}
       <ChannelSidebar />
       <ChatArea />
       <MembersList />

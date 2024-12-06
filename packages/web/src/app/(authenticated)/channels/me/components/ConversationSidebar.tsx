@@ -2,10 +2,11 @@
 
 import { AvatarFallback } from "@/components/ui/avatar";
 import { Avatar } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Users, Inbox, HelpCircle, Settings, Plus } from "lucide-react";
+import { Users, Inbox, HelpCircle, Settings, Plus, Link } from "lucide-react";
+import NextLink from "next/link";
 
 const directMessages = [
   { id: 1, name: "Sarah Connor", status: "online", unread: 2 },
@@ -20,27 +21,48 @@ const ConversationSidebar = () => (
     </div>
     <ScrollArea className="flex-grow">
       <div className="p-2">
-        <Button variant="ghost" className="w-full justify-start px-2 mb-1">
+        <NextLink
+          href="/channels/me/"
+          className={buttonVariants({
+            variant: "ghost",
+            className: "w-full justify-start px-2 mb-1",
+          })}
+        >
           <Users className="mr-2 h-4 w-4" />
           Friends
-        </Button>
-        <Button variant="ghost" className="w-full justify-start px-2 mb-1">
+        </NextLink>
+        <NextLink
+          href="/channels/me/"
+          className={buttonVariants({
+            variant: "ghost",
+            className: "w-full justify-start px-2 mb-1",
+          })}
+        >
           <Inbox className="mr-2 h-4 w-4" />
           Inbox
-        </Button>
-        <Button variant="ghost" className="w-full justify-start px-2 mb-4">
+        </NextLink>
+        <NextLink
+          href="/channels/me/"
+          className={buttonVariants({
+            variant: "ghost",
+            className: "w-full justify-start px-2 mb-4",
+          })}
+        >
           <HelpCircle className="mr-2 h-4 w-4" />
           Help
-        </Button>
+        </NextLink>
         <div className="text-sm font-semibold mb-2 flex justify-between items-center px-2">
           <span>Direct Messages</span>
           <Plus className="h-4 w-4" />
         </div>
         {directMessages.map((dm) => (
-          <Button
+          <NextLink
             key={dm.id}
-            variant="ghost"
-            className="w-full justify-start px-2 mb-1 relative"
+            href={`/channels/me/${dm.id}`}
+            className={buttonVariants({
+              variant: "ghost",
+              className: "w-full justify-start px-2 mb-1 relative",
+            })}
           >
             <Avatar className="h-8 w-8 mr-2">
               <AvatarFallback>{dm.name[0]}</AvatarFallback>
@@ -51,7 +73,7 @@ const ConversationSidebar = () => (
                 {dm.unread}
               </span>
             )}
-          </Button>
+          </NextLink>
         ))}
       </div>
     </ScrollArea>
@@ -60,9 +82,16 @@ const ConversationSidebar = () => (
         <AvatarFallback>U</AvatarFallback>
       </Avatar>
       <span className="ml-2 text-sm">Username</span>
-      <Button variant="ghost" size="icon" className="ml-auto">
+      <NextLink
+        href="/channels/me/settings"
+        className={buttonVariants({
+          variant: "ghost",
+          size: "icon",
+          className: "ml-auto",
+        })}
+      >
         <Settings className="h-4 w-4" />
-      </Button>
+      </NextLink>
     </div>
   </div>
 );

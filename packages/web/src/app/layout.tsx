@@ -26,10 +26,7 @@ export default async function RootLayout({
     <html lang="en">
       <body className="">
         <QueryProvider>
-          <SocketProvider session={session?.data}>
-            <Header />
-            {children}
-          </SocketProvider>
+          <SocketProvider session={session?.data}>{children}</SocketProvider>
         </QueryProvider>
       </body>
     </html>

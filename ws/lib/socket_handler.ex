@@ -229,7 +229,8 @@ defmodule WS.SocketHandler do
     dm_payload = %{
       "op" => "receive_dm",
       "from_user_id" => from_user_id,
-      "message" => message
+      "message" => message,
+      "user" => state.user
     }
 
     {:reply, {:text, encode_message(dm_payload, state.compression)}, state}
@@ -243,7 +244,8 @@ defmodule WS.SocketHandler do
     global_message = %{
       "op" => "receive_global",
       "from_user_id" => user_id,
-      "message" => message
+      "message" => message,
+      "user" => state.user
     }
 
     {:reply, {:text, encode_message(global_message, state.compression)}, state}

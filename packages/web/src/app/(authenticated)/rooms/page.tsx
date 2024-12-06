@@ -11,10 +11,10 @@ import Rooms from "@/app/components/Rooms";
 export default async function RoomsPage() {
   const queryClient = new QueryClient();
 
-  await queryClient.prefetchQuery({
-    queryKey: ["rooms"],
-    queryFn: () => JSON.stringify(client.api.rooms.get()),
-  });
+  // await queryClient.prefetchQuery({
+  //   queryKey: ["rooms"],
+  //   queryFn: () => JSON.stringify(client.api.rooms.get()),
+  // });
 
   return (
     <main>
