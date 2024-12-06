@@ -6,18 +6,11 @@ import { opentelemetry } from "@elysiajs/opentelemetry";
 import { BatchSpanProcessor } from "@opentelemetry/sdk-trace-node";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-proto";
 
-import { taskRoutes } from "./modules/tasks";
 import { auth } from "./lib/auth";
 import { authRoutes } from "./modules/auth";
-import { messageRoutes } from "./modules/messages";
 import { ClientToServerEvents, ServerToClientEvents } from "./types";
 import db from "./database/db";
-import {
-  createMessageSchema,
-  messages,
-  readMessageSchema,
-} from "./database/schema";
-import { roomRoutes } from "./modules/rooms";
+
 import { logger, logWebSocket } from "@lenoux01/lean-logs";
 
 const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(",") || [];
@@ -47,9 +40,7 @@ export const app = new Elysia()
     })
   )
   .use(swagger())
-  .group("/api", (app) =>
-    app.use(taskRoutes).use(authRoutes).use(messageRoutes).use(roomRoutes)
-  )
+  .group("/api", (app) => app.use(authRoutes))
   .all("/api/auth/*", betterAuthView)
   .listen(4000);
 

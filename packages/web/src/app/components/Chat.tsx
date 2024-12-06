@@ -57,6 +57,13 @@ export default function Chat({ roomId }: { roomId: string }) {
     onSuccess: (data) => {
       console.log("Message sent successfully", data.data);
 
+      // Send WebSocket event
+      socket?.send({
+        type: "message:send",
+        // @ts-ignore
+        data: data.data,
+      });
+
       // Scroll to bottom
       scrollToBottom();
     },
@@ -73,6 +80,50 @@ export default function Chat({ roomId }: { roomId: string }) {
 
   useEffect(() => {
     if (!socket) return;
+
+    // Define the handler
+    const handleMessage = (event: { data: { type: string; data: any } }) => {
+      const { type, data } = event.data;
+      if (type === "message:send") {
+        console.log("New message received", data);
+
+        // Update state or cache
+        queryClient.setQueryData(["messages", roomId], (old: any) => {
+          const messages = old?.data || [];
+          return {
+            ...old,
+            data: [...messages, data],
+          };
+        });
+
+        scrollToBottom();
+      }
+
+      if (type === "room:join") {
+        queryClient.setQueryData(["users", roomId], (old: any) => {
+          return {
+            ...old,
+            data: [...old.data, data.data.user],
+          };
+        });
+      }
+
+      if (type === "room:leave") {
+        console.log("User left room", data);
+        queryClient.setQueryData(["users", roomId], (old: any) => {
+          return {
+            ...old,
+            data: old.data.filter((user: any) => user.id !== data.data.user.id),
+          };
+        });
+      }
+    };
+
+    socket.on("message", handleMessage);
+
+    return () => {
+      socket.off("message", handleMessage);
+    };
   }, [socket, roomId, queryClient]);
 
   // Handle message submission
