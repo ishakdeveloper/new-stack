@@ -9,6 +9,9 @@ import {
   Plus,
   Settings,
   Trash,
+  ChevronRight,
+  Copy,
+  UserPlus,
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useGuildStore } from "@/stores/useGuildStore";
@@ -41,12 +44,6 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { DeleteServerModal } from "./DeleteServerModal";
 import { Switch } from "@/components/ui/switch";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
 
 const ChannelSidebar = () => {
   const router = useRouter();
@@ -55,10 +52,15 @@ const ChannelSidebar = () => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isCreateChannelOpen, setIsCreateChannelOpen] = useState(false);
   const [isCreateCategoryOpen, setIsCreateCategoryOpen] = useState(false);
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [newChannelName, setNewChannelName] = useState("");
   const [newCategoryName, setNewCategoryName] = useState("");
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
+    null
+  );
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [collapsedCategories, setCollapsedCategories] = useState<string[]>([]);
 
   const currentGuildId = useGuildStore((state) => state.currentGuildId);
   const currentChannelId = useGuildStore((state) => state.currentChannelId);
@@ -80,6 +82,19 @@ const ChannelSidebar = () => {
     enabled: !!currentGuildId,
   });
 
+  const { data: inviteCode } = useQuery({
+    queryKey: ["inviteCode", currentGuildId],
+    queryFn: async () => {
+      const res = await client.api.invites.post({
+        guildId: currentGuildId ?? "",
+        maxUses: 0,
+      });
+
+      return res.data?.inviteCode;
+    },
+    enabled: !!currentGuildId && isInviteModalOpen,
+  });
+
   const { data: channels } = useQuery({
     queryKey: ["channels", currentGuildId],
     queryFn: async () => {
@@ -95,13 +110,17 @@ const ChannelSidebar = () => {
     mutationFn: async () => {
       const res = await client.api
         .guilds({ guildId: currentGuildId ?? "" })
-        .channels.post({ name: newChannelName });
+        .channels.post({
+          name: newChannelName,
+          categoryId: selectedCategoryId ?? "",
+        });
       return res.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["channels", currentGuildId] });
       setIsCreateChannelOpen(false);
       setNewChannelName("");
+      setSelectedCategoryId(null);
       toast({
         title: "Channel Created",
         description: `Successfully created channel #${newChannelName}`,
@@ -153,6 +172,7 @@ const ChannelSidebar = () => {
   const handleCloseChannelModal = () => {
     setIsCreateChannelOpen(false);
     setNewChannelName("");
+    setSelectedCategoryId(null);
   };
 
   const handleCloseCategoryModal = () => {
@@ -160,11 +180,34 @@ const ChannelSidebar = () => {
     setNewCategoryName("");
   };
 
+  const toggleCategory = (categoryId: string) => {
+    setCollapsedCategories((prev) =>
+      prev.includes(categoryId)
+        ? prev.filter((id) => id !== categoryId)
+        : [...prev, categoryId]
+    );
+  };
+
+  const openCreateChannelModal = (categoryId: string | null = null) => {
+    setSelectedCategoryId(categoryId);
+    setIsCreateChannelOpen(true);
+  };
+
+  const handleCopyInvite = () => {
+    if (inviteCode) {
+      navigator.clipboard.writeText(inviteCode);
+      toast({
+        title: "Copied!",
+        description: "Invite link copied to clipboard",
+      });
+    }
+  };
+
   return (
     <div className="w-60 border-r flex flex-col h-full">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <div className="p-4 font-bold border-b flex items-center justify-between cursor-pointer hover:bg-accent/50">
+          <div className="p-4 font-bold flex items-center justify-between cursor-pointer hover:bg-accent/50">
             <span>{guild?.name}</span>
             <ChevronDown className="h-4 w-4" />
           </div>
@@ -178,7 +221,11 @@ const ChannelSidebar = () => {
             <Settings className="mr-2 h-4 w-4" />
             <span>Server Settings</span>
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setIsCreateChannelOpen(true)}>
+          <DropdownMenuItem onClick={() => setIsInviteModalOpen(true)}>
+            <UserPlus className="mr-2 h-4 w-4" />
+            <span>Invite People</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => openCreateChannelModal()}>
             <Plus className="mr-2 h-4 w-4" />
             <span>Create Channel</span>
           </DropdownMenuItem>
@@ -199,14 +246,65 @@ const ChannelSidebar = () => {
       <ContextMenu>
         <ContextMenuTrigger className="flex-1">
           <ScrollArea className="h-full">
-            <div className="p-2">
-              <Accordion type="multiple" className="space-y-2">
-                {channels?.categorized.map((category) => (
-                  <AccordionItem key={category.id} value={category.id}>
-                    <AccordionTrigger className="text-sm font-semibold">
-                      {category.name}
-                    </AccordionTrigger>
-                    <AccordionContent>
+            <div className="p-2 space-y-2">
+              {/* Uncategorized channels first */}
+              <div className="space-y-0.5">
+                {channels?.uncategorized.map((channel) => (
+                  <ContextMenu key={channel.id}>
+                    <ContextMenuTrigger>
+                      <Button
+                        variant="ghost"
+                        className={`w-full justify-start px-2 ${
+                          currentChannelId === channel.id ? "bg-accent" : ""
+                        }`}
+                        onClick={() => handleChannelClick(channel.id)}
+                      >
+                        <Hash className="mr-2 h-4 w-4" />
+                        {channel.name}
+                      </Button>
+                    </ContextMenuTrigger>
+                    <ContextMenuContent>
+                      <ContextMenuItem>
+                        <Pencil className="mr-2 h-4 w-4" />
+                        Edit Channel
+                      </ContextMenuItem>
+                      <ContextMenuItem className="text-red-600">
+                        <Trash className="mr-2 h-4 w-4" />
+                        Delete Channel
+                      </ContextMenuItem>
+                    </ContextMenuContent>
+                  </ContextMenu>
+                ))}
+              </div>
+
+              {/* Categorized channels */}
+              {channels?.categorized.map((category) => (
+                <div key={category.id} className="space-y-1">
+                  <ContextMenu>
+                    <ContextMenuTrigger>
+                      <div
+                        className="flex items-center text-sm font-semibold cursor-pointer hover:bg-accent/50 p-1 rounded"
+                        onClick={() => toggleCategory(category.id)}
+                      >
+                        {collapsedCategories.includes(category.id) ? (
+                          <ChevronRight className="h-4 w-4 mr-1" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4 mr-1" />
+                        )}
+                        {category.name}
+                      </div>
+                    </ContextMenuTrigger>
+                    <ContextMenuContent>
+                      <ContextMenuItem
+                        onClick={() => openCreateChannelModal(category.id)}
+                      >
+                        <Plus className="mr-2 h-4 w-4" />
+                        Create Channel
+                      </ContextMenuItem>
+                    </ContextMenuContent>
+                  </ContextMenu>
+                  {!collapsedCategories.includes(category.id) && (
+                    <div className="space-y-0.5">
                       {category.channels.map((channel) => (
                         <ContextMenu key={channel.id}>
                           <ContextMenuTrigger>
@@ -235,48 +333,15 @@ const ChannelSidebar = () => {
                           </ContextMenuContent>
                         </ContextMenu>
                       ))}
-                    </AccordionContent>
-                  </AccordionItem>
-                ))}
-                <AccordionItem value="uncategorized">
-                  <AccordionTrigger className="text-sm font-semibold">
-                    Uncategorized
-                  </AccordionTrigger>
-                  <AccordionContent>
-                    {channels?.uncategorized.map((channel) => (
-                      <ContextMenu key={channel.id}>
-                        <ContextMenuTrigger>
-                          <Button
-                            variant="ghost"
-                            className={`w-full justify-start px-2 ${
-                              currentChannelId === channel.id ? "bg-accent" : ""
-                            }`}
-                            onClick={() => handleChannelClick(channel.id)}
-                          >
-                            <Hash className="mr-2 h-4 w-4" />
-                            {channel.name}
-                          </Button>
-                        </ContextMenuTrigger>
-                        <ContextMenuContent>
-                          <ContextMenuItem>
-                            <Pencil className="mr-2 h-4 w-4" />
-                            Edit Channel
-                          </ContextMenuItem>
-                          <ContextMenuItem className="text-red-600">
-                            <Trash className="mr-2 h-4 w-4" />
-                            Delete Channel
-                          </ContextMenuItem>
-                        </ContextMenuContent>
-                      </ContextMenu>
-                    ))}
-                  </AccordionContent>
-                </AccordionItem>
-              </Accordion>
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           </ScrollArea>
         </ContextMenuTrigger>
         <ContextMenuContent>
-          <ContextMenuItem onClick={() => setIsCreateChannelOpen(true)}>
+          <ContextMenuItem onClick={() => openCreateChannelModal()}>
             <Plus className="mr-2 h-4 w-4" />
             Create Channel
           </ContextMenuItem>
@@ -292,7 +357,8 @@ const ChannelSidebar = () => {
           <DialogHeader>
             <DialogTitle>Create Channel</DialogTitle>
             <DialogDescription>
-              Create a new channel in this server
+              Create a new channel{" "}
+              {selectedCategoryId ? "in this category" : "in this server"}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreateChannel}>
@@ -382,6 +448,30 @@ const ChannelSidebar = () => {
               <Button type="submit">Create Category</Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isInviteModalOpen} onOpenChange={setIsInviteModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Invite People</DialogTitle>
+            <DialogDescription>
+              Share this link with others to invite them to your server
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex items-center space-x-2">
+            <Input
+              readOnly
+              value={
+                inviteCode
+                  ? `http://localhost:3000/invite/${inviteCode}`
+                  : "Loading..."
+              }
+            />
+            <Button size="icon" onClick={handleCopyInvite}>
+              <Copy className="h-4 w-4" />
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 

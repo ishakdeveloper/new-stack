@@ -55,11 +55,13 @@ const ChatArea = () => {
       await queryClient.invalidateQueries({
         queryKey: ["messages", currentChannelId],
       });
+      setMessage(""); // Clear input after sending
     },
   });
 
   const handleSendMessage = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (!message.trim()) return; // Don't send empty messages
     await sendMessage();
   };
 
@@ -70,20 +72,24 @@ const ChatArea = () => {
         <div className="font-bold">{channel?.data?.slug}</div>
       </div>
       <ScrollArea className="flex-grow p-4">
-        {messages?.data?.map((message) => (
-          <div key={message.id} className="mb-4">
-            <div className="flex items-center mb-1">
-              <Avatar className="h-8 w-8 mr-2">
-                <AvatarFallback>{message.author?.name[0]}</AvatarFallback>
-              </Avatar>
-              <div className="font-semibold">{message.author?.name}</div>
-              <div className="text-muted-foreground text-xs ml-2">
-                {message.createdAt.toLocaleString()}
+        <div className="flex flex-col-reverse">
+          {" "}
+          {/* Reverse the messages container */}
+          {messages?.data?.map((message) => (
+            <div key={message.id} className="mb-4">
+              <div className="flex items-center mb-1">
+                <Avatar className="h-8 w-8 mr-2">
+                  <AvatarFallback>{message.author?.name[0]}</AvatarFallback>
+                </Avatar>
+                <div className="font-semibold">{message.author?.name}</div>
+                <div className="text-muted-foreground text-xs ml-2">
+                  {message.createdAt.toLocaleString()}
+                </div>
               </div>
+              <div className="ml-10">{message.content}</div>
             </div>
-            <div className="ml-10">{message.content}</div>
-          </div>
-        ))}
+          ))}
+        </div>
       </ScrollArea>
       <div className="p-4 border-t">
         <form onSubmit={handleSendMessage}>

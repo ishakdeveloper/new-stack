@@ -12,7 +12,7 @@ import { Home, Plus, Bell, BellOff, LogOut } from "lucide-react";
 import React from "react";
 import Link from "next/link";
 import { Separator } from "@/components/ui/separator";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { client } from "@/utils/client";
 import { authClient } from "@/utils/authClient";
 import { useGuildStore } from "@/stores/useGuildStore";
@@ -53,6 +53,34 @@ export default function ServerList() {
     },
   });
 
+  const leaveGuild = useMutation({
+    mutationKey: ["leaveGuild", currentUser?.id],
+    mutationFn: async (guildId: string) => {
+      // Call API to leave the guild
+      await client.api.guilds({ guildId }).leave.delete();
+    },
+    onSuccess: (_, guildId) => {
+      console.log("onSuccess", guildId);
+      // Update the cached data to remove the guild
+      queryClient.setQueryData(["guilds", currentUser?.id], (oldData: any) => {
+        if (!Array.isArray(oldData)) {
+          console.warn("Cache data is undefined or invalid:", oldData);
+          return oldData; // Return unmodified data if invalid
+        }
+
+        // Filter out the guild object with the matching guildId
+        return oldData.filter((entry: any) => entry.guilds?.id !== guildId);
+      });
+      // Redirect to "Home" after leaving
+      router.push("/channels/me");
+    },
+    onError: (error) => {
+      // Show error feedback to the user (e.g., toast or modal)
+      console.error("Failed to leave guild:", error);
+      alert("Failed to leave the guild. Please try again.");
+    },
+  });
+
   const handleGuildClick = (guildId: string) => {
     setCurrentGuildId(guildId);
 
@@ -64,13 +92,11 @@ export default function ServerList() {
   };
 
   const handleLeaveGuild = async (guildId: string) => {
-    // try {
-    //   await client.api.guilds[":guildId"].leave.delete({ params: { guildId } });
-    //   queryClient.invalidateQueries(["guilds"]);
-    //   router.push("/channels/me");
-    // } catch (error) {
-    //   console.error("Failed to leave guild:", error);
-    // }
+    try {
+      await leaveGuild.mutateAsync(guildId);
+    } catch (error) {
+      console.error("Failed to leave guild:", error);
+    }
   };
 
   return (

@@ -29,8 +29,15 @@ export default async function RootLayout({
       <body className="">
         <QueryProvider>
           <SocketProvider session={session?.data}>
+            {/* <ThemeProvider
+              attribute="class"
+              defaultTheme="system"
+              enableSystem
+              disableTransitionOnChange
+            > */}
             {children}
             <Toaster />
+            {/* </ThemeProvider> */}
           </SocketProvider>
         </QueryProvider>
       </body>

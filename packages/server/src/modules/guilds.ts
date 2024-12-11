@@ -1,20 +1,23 @@
 import Elysia, { t } from "elysia";
 import { userMiddleware } from "../middlewares/userMiddleware";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import {
   categories,
   CategorySchema,
   channels,
   ChannelSchema,
+  guildInviteLinks,
   guilds,
 } from "../database/schema";
 import { guildMembers } from "../database/schema";
 import db from "../database/db";
 import { generateChannelSlug } from "../lib/generateChannelSlug";
 import { user } from "../database/schema/auth";
+import { generateInviteCode } from "../lib/generateInviteCode";
 
 export const guildRoutes = new Elysia()
   .derive(({ request }) => userMiddleware(request))
+  // Create a guild
   // Create a guild
   .post(
     "/guilds",
@@ -36,6 +39,19 @@ export const guildRoutes = new Elysia()
       await db.insert(guildMembers).values({
         guildId,
         userId: user?.id ?? "",
+      });
+
+      // Create a default invite link for the guild
+      const inviteCode = generateInviteCode();
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7); // Set expiration to 7 days from now
+
+      await db.insert(guildInviteLinks).values({
+        inviteCode,
+        guildId,
+        inviterId: user?.id ?? "",
+        maxUses: null, // Unlimited by default
+        expiresAt,
       });
 
       // Create the default category
@@ -67,6 +83,7 @@ export const guildRoutes = new Elysia()
         guild: guild[0],
         defaultCategory: category[0],
         defaultChannel: channel[0],
+        defaultInviteCode: inviteCode, // Return the invite code
       };
     },
     {
@@ -144,12 +161,22 @@ export const guildRoutes = new Elysia()
   .delete("/guilds/:guildId/leave", async ({ params, user }) => {
     const { guildId } = params;
 
-    await db
+    console.log("Deleting membership:", { guildId, userId: user?.id });
+
+    const result = await db
       .delete(guildMembers)
       .where(
-        eq(guildMembers.guildId, guildId) &&
+        and(
+          eq(guildMembers.guildId, guildId),
           eq(guildMembers.userId, user?.id ?? "")
+        )
       );
+
+    console.log("Rows deleted:", result.rowCount);
+
+    if (result.rowCount === 0) {
+      return { error: "You are not a member of this guild or already left." };
+    }
 
     return { message: "Left guild successfully" };
   });

@@ -16,10 +16,12 @@ const MembersList = () => {
       const data = client.api
         .guilds({ guildId: currentGuildId ?? "" })
         .members.get();
-
       return data;
     },
-    enabled: !!currentGuildId,
+    enabled: !!currentGuildId, // Ensures the query runs only if currentGuildId exists
+    refetchOnWindowFocus: false, // Disable refetch on window focus
+    refetchOnReconnect: false, // Disable refetch on reconnect
+    refetchInterval: false, // Disable automatic refetching at intervals
   });
 
   return (
