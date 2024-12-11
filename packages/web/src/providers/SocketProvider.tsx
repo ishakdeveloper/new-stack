@@ -5,9 +5,10 @@ import React, {
   createContext,
   useContext,
   useEffect,
-  useState,
   useCallback,
+  useState,
 } from "react";
+import useWebSocket, { ReadyState } from "react-use-websocket";
 
 // Define WebSocket message types
 type WebSocketMessage =
@@ -22,8 +23,8 @@ type WebSocketMessage =
 
 // WebSocket context shape
 type SocketContextType = {
-  socket: WebSocket | null;
   sendMessage: (message: WebSocketMessage) => void;
+  lastMessage: MessageEvent<any> | null;
   isConnected: boolean;
 };
 
@@ -34,59 +35,48 @@ export const SocketProvider: React.FC<{
   children: React.ReactNode;
   session: Session | null;
 }> = ({ children, session }) => {
-  const [socket, setSocket] = useState<WebSocket | null>(null);
-  const [isConnected, setIsConnected] = useState<boolean>(false);
+  const socketUrl = "ws://localhost:4001/ws"; // Replace with your WebSocket URL
+  const [shouldConnect, setShouldConnect] = useState(false);
 
+  // Initialize WebSocket connection using `react-use-websocket`
+  const {
+    sendMessage: sendRawMessage,
+    lastMessage,
+    readyState,
+  } = useWebSocket(socketUrl, {
+    shouldReconnect: () => true, // Automatically attempt reconnections
+    reconnectAttempts: 10, // Limit reconnection attempts
+    reconnectInterval: 3000, // Reconnect every 3 seconds
+    onOpen: () => console.log("WebSocket connection opened"),
+    onClose: () => console.log("WebSocket connection closed"),
+    onError: (event) => console.error("WebSocket error:", event),
+    share: true, // Share the WebSocket connection across components
+  });
+
+  // Determine connection status
+  const isConnected = readyState === ReadyState.OPEN;
+
+  // Handle `session` changes and send registration message
   useEffect(() => {
-    const ws = new WebSocket("ws://localhost:4001/ws"); // Replace with your WebSocket URL
-    setSocket(ws);
+    if (isConnected && session) {
+      sendMessage({ op: "register", user: session.user });
+    }
+  }, [isConnected, session]);
 
-    ws.onopen = () => {
-      setIsConnected(true);
-      console.log("Connected to WebSocket server");
-
-      if (session) {
-        sendMessage({ op: "register", user: session.user });
-      }
-    };
-
-    ws.onerror = (error) => {
-      console.error("WebSocket Error: ", error);
-    };
-
-    ws.onclose = () => {
-      setIsConnected(false);
-      console.log("WebSocket disconnected");
-    };
-
-    return () => {
-      ws.close(); // Clean up WebSocket connection on unmount
-    };
-  }, [session]);
-
+  // Wrapper to send WebSocket messages as JSON
   const sendMessage = useCallback(
     (message: WebSocketMessage) => {
-      if (socket) {
-        if (socket.readyState === WebSocket.OPEN) {
-          socket.send(JSON.stringify(message));
-        } else {
-          console.warn("WebSocket is not open. Queueing message.");
-        }
+      if (isConnected) {
+        sendRawMessage(JSON.stringify(message));
+      } else {
+        console.warn("WebSocket is not connected. Cannot send message.");
       }
     },
-    [socket] // Ensure the latest socket state is used
+    [sendRawMessage, isConnected]
   );
 
-  useEffect(() => {
-    if (isConnected && socket) {
-      if (session) {
-        sendMessage({ op: "register", user: session.user });
-      }
-    }
-  }, [isConnected, socket, session]);
-
   return (
-    <SocketContext.Provider value={{ socket, sendMessage, isConnected }}>
+    <SocketContext.Provider value={{ sendMessage, lastMessage, isConnected }}>
       {children}
     </SocketContext.Provider>
   );
