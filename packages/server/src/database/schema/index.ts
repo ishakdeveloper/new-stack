@@ -37,7 +37,7 @@ export const guildMembers = pgTable("guild_members", {
   id: uuid("id").defaultRandom().primaryKey(),
   guildId: uuid("guildId")
     .notNull()
-    .references(() => guilds.id), // Reference to Guild
+    .references(() => guilds.id, { onDelete: "cascade" }), // Reference to Guild
   userId: text("userId")
     .notNull()
     .references(() => user.id), // Reference to User
@@ -57,7 +57,9 @@ export const categories = pgTable("categories", {
   name: text("name").notNull(),
   guildId: uuid("guildId")
     .notNull()
-    .references(() => guilds.id), // Category belongs to a guild
+    .references(() => guilds.id, {
+      onDelete: "cascade",
+    }), // Category belongs to a guild
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
 });
@@ -75,7 +77,7 @@ export const channels = pgTable("channels", {
   name: text("name").notNull(),
   categoryId: uuid("categoryId")
     .notNull()
-    .references(() => categories.id), // Channel belongs to a category
+    .references(() => categories.id, { onDelete: "cascade" }), // Channel belongs to a category
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
 });
@@ -108,7 +110,7 @@ export const dmChannelUsers = pgTable("dm_channel_users", {
   id: uuid("id").defaultRandom().primaryKey(),
   channelId: uuid("channelId")
     .notNull()
-    .references(() => dmChannels.id), // DM/Group DM this user is part of
+    .references(() => dmChannels.id, { onDelete: "cascade" }), // DM/Group DM this user is part of
   userId: text("userId")
     .notNull()
     .references(() => user.id), // User in the DM or group
@@ -125,7 +127,7 @@ export const roles = pgTable("roles", {
   id: uuid("id").defaultRandom().primaryKey(),
   guildId: uuid("guildId")
     .notNull()
-    .references(() => guilds.id), // Role belongs to a guild
+    .references(() => guilds.id, { onDelete: "cascade" }), // Role belongs to a guild
   name: text("name").notNull(), // Role name
   color: integer("color"), // Optional role color
   isDefault: boolean("isDefault").notNull().default(false), // True for default "Member" role
@@ -160,8 +162,12 @@ export const FriendshipCreateSchema = t.Omit(FriendshipSchema, [
 // Messages Table
 export const messages = pgTable("messages", {
   id: uuid("id").defaultRandom().primaryKey(),
-  channelId: uuid("channelId").references(() => channels.id), // Reference for Guild messages
-  dmChannelId: uuid("dmChannelId").references(() => dmChannels.id), // Reference for DM messages
+  channelId: uuid("channelId").references(() => channels.id, {
+    onDelete: "cascade",
+  }), // Reference for Guild messages
+  dmChannelId: uuid("dmChannelId").references(() => dmChannels.id, {
+    onDelete: "cascade",
+  }), // Reference for DM messages
   authorId: text("authorId")
     .notNull()
     .references(() => user.id), // User who sent the message
@@ -182,7 +188,7 @@ export const guildInviteLinks = pgTable("guild_invite_links", {
   id: uuid("id").defaultRandom().primaryKey(),
   guildId: uuid("guildId")
     .notNull()
-    .references(() => guilds.id),
+    .references(() => guilds.id, { onDelete: "cascade" }),
   inviterId: text("inviterId")
     .notNull()
     .references(() => user.id), // User who created the invite
@@ -206,7 +212,7 @@ export const inviteLinkUsages = pgTable("invite_link_usages", {
   id: uuid("id").defaultRandom().primaryKey(),
   inviteLinkId: uuid("inviteLinkId")
     .notNull()
-    .references(() => guildInviteLinks.id), // Reference to the invite link
+    .references(() => guildInviteLinks.id, { onDelete: "cascade" }), // Reference to the invite link
   invitedUserId: text("invitedUserId")
     .notNull()
     .references(() => user.id), // User who used the invite link

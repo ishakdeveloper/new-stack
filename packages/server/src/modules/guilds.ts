@@ -89,6 +89,18 @@ export const guildRoutes = new Elysia()
     return guild[0];
   })
 
+  // Get all members of a guild
+  .get("/guilds/:guildId/members", async ({ params }) => {
+    const { guildId } = params;
+
+    const members = await db
+      .select()
+      .from(guildMembers)
+      .where(eq(guildMembers.guildId, guildId));
+
+    return members;
+  })
+
   // Get all categories and their channels in a guild
   .get(
     "/guilds/:guildId/categories",
@@ -190,6 +202,20 @@ export const guildRoutes = new Elysia()
 
     await db.delete(guilds).where(eq(guilds.id, guildId));
     return { message: "Guild deleted successfully" };
+  })
+
+  // Leave a guild
+  .delete("/guilds/:guildId/leave", async ({ params, user }) => {
+    const { guildId } = params;
+
+    await db
+      .delete(guildMembers)
+      .where(
+        eq(guildMembers.guildId, guildId) &&
+          eq(guildMembers.userId, user?.id ?? "")
+      );
+
+    return { message: "Left guild successfully" };
   })
 
   // Create a category in a guild

@@ -1,7 +1,7 @@
 import db from "./db";
 import {
   guilds,
-  guildUsers,
+  guildMembers,
   categories,
   channels,
   roles,
@@ -47,7 +47,7 @@ async function seedDatabase() {
     ];
 
     for (const guildUser of guildUserEntries) {
-      await db.insert(guildUsers).values(guildUser);
+      await db.insert(guildMembers).values(guildUser);
     }
     console.log("Guild users seeded.");
 
