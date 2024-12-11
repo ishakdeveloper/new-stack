@@ -60,6 +60,8 @@ export const categories = pgTable("categories", {
     .references(() => guilds.id, {
       onDelete: "cascade",
     }), // Category belongs to a guild
+  position: integer("position").notNull().default(0),
+  isPrivate: boolean("isPrivate").notNull().default(false),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
 });
@@ -75,9 +77,11 @@ export const CategoryCreateSchema = t.Omit(CategorySchema, [
 export const channels = pgTable("channels", {
   id: uuid("id").defaultRandom().primaryKey(),
   name: text("name").notNull(),
-  categoryId: uuid("categoryId")
-    .notNull()
-    .references(() => categories.id, { onDelete: "cascade" }), // Channel belongs to a category
+  categoryId: uuid("categoryId").references(() => categories.id, {
+    onDelete: "cascade",
+  }), // Channel can optionally belong to a category
+  position: integer("position").notNull().default(0),
+  isPrivate: boolean("isPrivate").notNull().default(false),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
 });
