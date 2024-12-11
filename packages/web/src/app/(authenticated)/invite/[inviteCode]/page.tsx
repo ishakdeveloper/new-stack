@@ -15,6 +15,8 @@ export default function InvitePage({
   const router = useRouter();
   const { toast } = useToast();
 
+  const setCurrentGuildId = useGuildStore((state) => state.setCurrentGuildId);
+
   async function fetchParams() {
     const { inviteCode } = await params;
     return inviteCode;
@@ -41,7 +43,10 @@ export default function InvitePage({
         description: "You have joined the server",
       });
       if (guild) {
-        router.push(`/channels/${guild?.guilds.id}`);
+        setCurrentGuildId(guild?.guilds.id);
+        router.push(
+          `/channels/${guild?.guilds.id}/${getDefaultChannel(guild?.guilds.id)}`
+        );
       }
     },
     onError: (error: any) => {

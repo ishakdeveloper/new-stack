@@ -6,8 +6,8 @@ interface GuildStore {
   setCurrentGuildId: (guildId: string | null) => void;
   currentChannelId: string | null;
   setCurrentChannelId: (channelId: string | null) => void;
-  lastVisitedChannels: Record<string, string | null>; // Track last visited channel per guild
-  setLastVisitedChannel: (guildId: string, channelId: string) => void; // Update last visited channel for a guild
+  lastVisitedChannels: Record<string, string | null>;
+  setLastVisitedChannel: (guildId: string, channelId: string) => void;
 }
 
 export const useGuildStore = create(
@@ -17,7 +17,6 @@ export const useGuildStore = create(
       setCurrentGuildId: (guildId) => {
         const { lastVisitedChannels, setCurrentChannelId } = get();
 
-        // Update the current guild and set the last visited channel for that guild
         set({ currentGuildId: guildId });
         if (guildId) {
           const lastChannelId = lastVisitedChannels[guildId] || null;
@@ -26,17 +25,17 @@ export const useGuildStore = create(
       },
       currentChannelId: null,
       setCurrentChannelId: (channelId) => set({ currentChannelId: channelId }),
-      lastVisitedChannels: {}, // Initialize an empty object to track guild-channel mapping
+      lastVisitedChannels: {},
       setLastVisitedChannel: (guildId, channelId) =>
         set((state) => ({
           lastVisitedChannels: {
             ...state.lastVisitedChannels,
-            [guildId]: channelId, // Update the mapping for the specific guild
+            [guildId]: channelId,
           },
         })),
     }),
     {
-      name: "guildStore", // The key to store the data under in localStorage
+      name: "guildStore",
       partialize: (state) => {
         const { currentGuildId, currentChannelId, lastVisitedChannels } = state;
         return {

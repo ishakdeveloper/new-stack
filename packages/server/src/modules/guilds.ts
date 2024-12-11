@@ -110,7 +110,16 @@ export const guildRoutes = new Elysia()
 
     const guild = await db.select().from(guilds).where(eq(guilds.id, guildId));
 
-    return guild[0];
+    // Get the default channel for this guild
+    const defaultChannel = await db
+      .select()
+      .from(channels)
+      .where(and(eq(channels.guildId, guildId), eq(channels.name, "General")));
+
+    return {
+      guild: guild[0],
+      defaultChannel: defaultChannel[0],
+    };
   })
 
   // Get all members of a guild

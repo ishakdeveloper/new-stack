@@ -208,7 +208,7 @@ const ChannelSidebar = () => {
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <div className="p-4 font-bold flex items-center justify-between cursor-pointer hover:bg-accent/50">
-            <span>{guild?.name}</span>
+            <span>{guild?.guild.name}</span>
             <ChevronDown className="h-4 w-4" />
           </div>
         </DropdownMenuTrigger>
@@ -468,7 +468,21 @@ const ChannelSidebar = () => {
                   : "Loading..."
               }
             />
-            <Button size="icon" onClick={handleCopyInvite}>
+            <Button
+              size="icon"
+              onClick={() => {
+                if (inviteCode) {
+                  navigator.clipboard.writeText(
+                    `http://localhost:3000/invite/${inviteCode}`
+                  );
+                }
+
+                toast({
+                  title: "Copied!",
+                  description: "Invite link copied to clipboard",
+                });
+              }}
+            >
               <Copy className="h-4 w-4" />
             </Button>
           </div>
