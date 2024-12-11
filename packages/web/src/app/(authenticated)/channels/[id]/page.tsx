@@ -14,21 +14,9 @@ export default function ChannelPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const { setCurrentGuildId, currentGuildId } = useGuildStore();
-
-  useEffect(() => {
-    async function fetchParams() {
-      const { id } = await params; // Await the Promise
-      setCurrentGuildId(id); // Update Zustand store
-    }
-
-    fetchParams();
-  }, [params, setCurrentGuildId]);
-
   return (
     <>
       <ChatArea />
-      <MembersList />
     </>
   );
 }
