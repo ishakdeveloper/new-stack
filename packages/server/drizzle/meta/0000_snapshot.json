@@ -1,5 +1,5 @@
 {
-  "id": "96271e2d-5323-417b-825f-95a8fc84c17e",
+  "id": "3f8fb42d-193a-481a-a10d-828da4d8723b",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -736,8 +736,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.guild_users": {
-      "name": "guild_users",
+    "public.guild_members": {
+      "name": "guild_members",
       "schema": "",
       "columns": {
         "id": {
@@ -759,14 +759,14 @@
           "primaryKey": false,
           "notNull": true
         },
-        "roleId": {
-          "name": "roleId",
-          "type": "uuid",
+        "roleIds": {
+          "name": "roleIds",
+          "type": "text[]",
           "primaryKey": false,
           "notNull": false
         },
-        "createdAt": {
-          "name": "createdAt",
+        "joinedAt": {
+          "name": "joinedAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
@@ -775,9 +775,9 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "guild_users_guildId_guilds_id_fk": {
-          "name": "guild_users_guildId_guilds_id_fk",
-          "tableFrom": "guild_users",
+        "guild_members_guildId_guilds_id_fk": {
+          "name": "guild_members_guildId_guilds_id_fk",
+          "tableFrom": "guild_members",
           "tableTo": "guilds",
           "columnsFrom": [
             "guildId"
@@ -788,25 +788,12 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "guild_users_userId_user_id_fk": {
-          "name": "guild_users_userId_user_id_fk",
-          "tableFrom": "guild_users",
+        "guild_members_userId_user_id_fk": {
+          "name": "guild_members_userId_user_id_fk",
+          "tableFrom": "guild_members",
           "tableTo": "user",
           "columnsFrom": [
             "userId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "guild_users_roleId_roles_id_fk": {
-          "name": "guild_users_roleId_roles_id_fk",
-          "tableFrom": "guild_users",
-          "tableTo": "roles",
-          "columnsFrom": [
-            "roleId"
           ],
           "columnsTo": [
             "id"
@@ -838,6 +825,18 @@
           "primaryKey": false,
           "notNull": true
         },
+        "iconUrl": {
+          "name": "iconUrl",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ownerId": {
+          "name": "ownerId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
         "createdAt": {
           "name": "createdAt",
           "type": "timestamp",
@@ -851,12 +850,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
-        },
-        "ownerId": {
-          "name": "ownerId",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
         }
       },
       "indexes": {},
@@ -958,21 +951,33 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "text": {
-          "name": "text",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "senderId": {
-          "name": "senderId",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
         "channelId": {
           "name": "channelId",
           "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "dmChannelId": {
+          "name": "dmChannelId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "authorId": {
+          "name": "authorId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "content": {
+          "name": "content",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "attachments": {
+          "name": "attachments",
+          "type": "text[]",
           "primaryKey": false,
           "notNull": false
         },
@@ -993,12 +998,12 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "messages_senderId_user_id_fk": {
-          "name": "messages_senderId_user_id_fk",
+        "messages_channelId_channels_id_fk": {
+          "name": "messages_channelId_channels_id_fk",
           "tableFrom": "messages",
-          "tableTo": "user",
+          "tableTo": "channels",
           "columnsFrom": [
-            "senderId"
+            "channelId"
           ],
           "columnsTo": [
             "id"
@@ -1006,12 +1011,25 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "messages_channelId_dm_channels_id_fk": {
-          "name": "messages_channelId_dm_channels_id_fk",
+        "messages_dmChannelId_dm_channels_id_fk": {
+          "name": "messages_dmChannelId_dm_channels_id_fk",
           "tableFrom": "messages",
           "tableTo": "dm_channels",
           "columnsFrom": [
-            "channelId"
+            "dmChannelId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "messages_authorId_user_id_fk": {
+          "name": "messages_authorId_user_id_fk",
+          "tableFrom": "messages",
+          "tableTo": "user",
+          "columnsFrom": [
+            "authorId"
           ],
           "columnsTo": [
             "id"
@@ -1037,17 +1055,23 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
+        "guildId": {
+          "name": "guildId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
         "name": {
           "name": "name",
           "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "guildId": {
-          "name": "guildId",
-          "type": "uuid",
+        "color": {
+          "name": "color",
+          "type": "integer",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "isDefault": {
           "name": "isDefault",

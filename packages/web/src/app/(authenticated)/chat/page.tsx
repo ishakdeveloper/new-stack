@@ -19,15 +19,15 @@ export default async function ChatPage() {
 
   const queryClient = new QueryClient();
 
-  await queryClient.prefetchQuery({
-    queryKey: ["messages"],
-    queryFn: () =>
-      JSON.stringify(
-        client.api.messages.get({
-          query: { userId: session?.data?.user?.id ?? "" },
-        })
-      ),
-  });
+  // await queryClient.prefetchQuery({
+  //   queryKey: ["messages"],
+  //   queryFn: () =>
+  //     JSON.stringify(
+  //       client.api.messages.get({
+  //         query: { userId: session?.data?.user?.id ?? "" },
+  //       })
+  //     ),
+  // });
 
   return (
     <main className="max-w-5xl mx-auto h-[calc(100vh-8rem)]">

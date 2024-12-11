@@ -2,7 +2,7 @@ import Elysia, { t } from "elysia";
 import db from "../database/db";
 import {
   guildInviteLinks,
-  guildUsers,
+  guildMembers,
   inviteLinkUsages,
 } from "../database/schema";
 import { userMiddleware } from "../middlewares/userMiddleware";
@@ -63,7 +63,7 @@ export const inviteRoutes = new Elysia()
           }
 
           // Add the user to the guild
-          await db.insert(guildUsers).values({
+          await db.insert(guildMembers).values({
             guildId: invite.guildId,
             userId: user?.id ?? "",
           });

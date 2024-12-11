@@ -17,22 +17,22 @@ export default async function RoomPage({
   const queryClient = new QueryClient();
   const { id: roomId } = await params;
 
-  await queryClient.prefetchQuery({
-    queryKey: ["room", roomId],
-    queryFn: () =>
-      JSON.stringify(client.api.rooms.get({ query: { id: roomId } })),
-  });
+  // await queryClient.prefetchQuery({
+  //   queryKey: ["room", roomId],
+  //   queryFn: () =>
+  //     JSON.stringify(client.api.rooms.get({ query: { id: roomId } })),
+  // });
 
-  await queryClient.prefetchQuery({
-    queryKey: ["messages", roomId],
-    queryFn: () =>
-      JSON.stringify(client.api.rooms({ id: roomId }).messages.get()),
-  });
+  // await queryClient.prefetchQuery({
+  //   queryKey: ["messages", roomId],
+  //   queryFn: () =>
+  //     JSON.stringify(client.api.rooms({ id: roomId }).messages.get()),
+  // });
 
-  await queryClient.prefetchQuery({
-    queryKey: ["users", roomId],
-    queryFn: () => JSON.stringify(client.api.rooms({ id: roomId }).users.get()),
-  });
+  // await queryClient.prefetchQuery({
+  //   queryKey: ["users", roomId],
+  //   queryFn: () => JSON.stringify(client.api.rooms({ id: roomId }).users.get()),
+  // });
 
   return (
     <main>

@@ -99,20 +99,21 @@ CREATE TABLE IF NOT EXISTS "guild_invite_links" (
 	CONSTRAINT "guild_invite_links_inviteCode_unique" UNIQUE("inviteCode")
 );
 --> statement-breakpoint
-CREATE TABLE IF NOT EXISTS "guild_users" (
+CREATE TABLE IF NOT EXISTS "guild_members" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"guildId" uuid NOT NULL,
 	"userId" text NOT NULL,
-	"roleId" uuid,
-	"createdAt" timestamp DEFAULT now() NOT NULL
+	"roleIds" text[],
+	"joinedAt" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "guilds" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"name" text NOT NULL,
+	"iconUrl" text,
+	"ownerId" text NOT NULL,
 	"createdAt" timestamp DEFAULT now() NOT NULL,
-	"updatedAt" timestamp DEFAULT now() NOT NULL,
-	"ownerId" text NOT NULL
+	"updatedAt" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "invite_link_usages" (
@@ -124,17 +125,20 @@ CREATE TABLE IF NOT EXISTS "invite_link_usages" (
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "messages" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"text" text NOT NULL,
-	"senderId" text NOT NULL,
 	"channelId" uuid,
+	"dmChannelId" uuid,
+	"authorId" text NOT NULL,
+	"content" text,
+	"attachments" text[],
 	"createdAt" timestamp DEFAULT now() NOT NULL,
 	"updatedAt" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "roles" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"name" text NOT NULL,
 	"guildId" uuid NOT NULL,
+	"name" text NOT NULL,
+	"color" integer,
 	"isDefault" boolean DEFAULT false NOT NULL,
 	"createdAt" timestamp DEFAULT now() NOT NULL
 );
@@ -206,19 +210,13 @@ EXCEPTION
 END $$;
 --> statement-breakpoint
 DO $$ BEGIN
- ALTER TABLE "guild_users" ADD CONSTRAINT "guild_users_guildId_guilds_id_fk" FOREIGN KEY ("guildId") REFERENCES "public"."guilds"("id") ON DELETE no action ON UPDATE no action;
+ ALTER TABLE "guild_members" ADD CONSTRAINT "guild_members_guildId_guilds_id_fk" FOREIGN KEY ("guildId") REFERENCES "public"."guilds"("id") ON DELETE no action ON UPDATE no action;
 EXCEPTION
  WHEN duplicate_object THEN null;
 END $$;
 --> statement-breakpoint
 DO $$ BEGIN
- ALTER TABLE "guild_users" ADD CONSTRAINT "guild_users_userId_user_id_fk" FOREIGN KEY ("userId") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;
-EXCEPTION
- WHEN duplicate_object THEN null;
-END $$;
---> statement-breakpoint
-DO $$ BEGIN
- ALTER TABLE "guild_users" ADD CONSTRAINT "guild_users_roleId_roles_id_fk" FOREIGN KEY ("roleId") REFERENCES "public"."roles"("id") ON DELETE no action ON UPDATE no action;
+ ALTER TABLE "guild_members" ADD CONSTRAINT "guild_members_userId_user_id_fk" FOREIGN KEY ("userId") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;
 EXCEPTION
  WHEN duplicate_object THEN null;
 END $$;
@@ -242,13 +240,19 @@ EXCEPTION
 END $$;
 --> statement-breakpoint
 DO $$ BEGIN
- ALTER TABLE "messages" ADD CONSTRAINT "messages_senderId_user_id_fk" FOREIGN KEY ("senderId") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;
+ ALTER TABLE "messages" ADD CONSTRAINT "messages_channelId_channels_id_fk" FOREIGN KEY ("channelId") REFERENCES "public"."channels"("id") ON DELETE no action ON UPDATE no action;
 EXCEPTION
  WHEN duplicate_object THEN null;
 END $$;
 --> statement-breakpoint
 DO $$ BEGIN
- ALTER TABLE "messages" ADD CONSTRAINT "messages_channelId_dm_channels_id_fk" FOREIGN KEY ("channelId") REFERENCES "public"."dm_channels"("id") ON DELETE no action ON UPDATE no action;
+ ALTER TABLE "messages" ADD CONSTRAINT "messages_dmChannelId_dm_channels_id_fk" FOREIGN KEY ("dmChannelId") REFERENCES "public"."dm_channels"("id") ON DELETE no action ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "messages" ADD CONSTRAINT "messages_authorId_user_id_fk" FOREIGN KEY ("authorId") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;
 EXCEPTION
  WHEN duplicate_object THEN null;
 END $$;

@@ -2,16 +2,13 @@
 
 import React, { useEffect } from "react";
 import ChannelSidebar from "../components/ChannelSidebar";
-import ChatArea from "../components/ChatArea";
-import MembersList from "../components/MembersList";
-import { client } from "@/utils/client";
-import { useQueryClient } from "@tanstack/react-query";
-import { authClient } from "@/utils/authClient";
 import { useGuildStore } from "@/stores/useGuildStore";
 
-export default function ChannelPage({
+export default function GuildLayout({
+  children,
   params,
 }: {
+  children: React.ReactNode;
   params: Promise<{ id: string }>;
 }) {
   const { setCurrentGuildId, currentGuildId } = useGuildStore();
@@ -26,9 +23,9 @@ export default function ChannelPage({
   }, [params, setCurrentGuildId]);
 
   return (
-    <>
-      <ChatArea />
-      <MembersList />
-    </>
+    <div className="flex flex-1">
+      <ChannelSidebar />
+      {children}
+    </div>
   );
 }

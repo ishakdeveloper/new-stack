@@ -1,3 +1,4 @@
+import LoadingScreen from "@/components/LoadingScreen";
 import { SocketProvider } from "@/providers/SocketProvider";
 import { authClient } from "@/utils/authClient";
 import { client } from "@/utils/client";
@@ -21,5 +22,5 @@ export default async function UnauthenticatedLayout({
     redirect("/login");
   }
 
-  return <>{children}</>;
+  return <>{session.data ? <>{children}</> : <LoadingScreen />}</>;
 }

@@ -21,6 +21,7 @@ import {
   guildChannelRoutes,
 } from "./modules/messages";
 import { channelRoutes } from "./modules/channels";
+import { dmRoutes } from "./modules/dm";
 
 const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(",") || [];
 
@@ -46,6 +47,7 @@ export const app = new Elysia()
   .use(
     cors({
       origin: validateOrigin,
+      credentials: true,
     })
   )
   .use(swagger())
@@ -59,6 +61,7 @@ export const app = new Elysia()
       .use(guildChannelRoutes)
       .use(groupDmRoutes)
       .use(channelRoutes)
+      .use(dmRoutes)
   )
   .all("/api/auth/*", betterAuthView)
   .listen(4000);

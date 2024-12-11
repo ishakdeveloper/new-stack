@@ -1,167 +1,241 @@
 import Elysia, { t } from "elysia";
 import { userMiddleware } from "../middlewares/userMiddleware";
 import { eq } from "drizzle-orm";
-import { categories, channels, guilds } from "../database/schema";
-import { guildUsers } from "../database/schema";
+import {
+  categories,
+  CategorySchema,
+  channels,
+  ChannelSchema,
+  guilds,
+} from "../database/schema";
+import { guildMembers } from "../database/schema";
 import db from "../database/db";
 
 export const guildRoutes = new Elysia()
   .derive(({ request }) => userMiddleware(request))
-  .group("/guilds", (app) =>
-    app
-      // Create a guild
-      .post(
-        "/",
-        async ({ body, user }) => {
-          const { name } = body;
+  // Create a guild
+  .post(
+    "/guilds",
+    async ({ body, user }) => {
+      const { name } = body;
 
-          // Create the guild
-          const guild = await db
-            .insert(guilds)
-            .values({
-              name,
-              ownerId: user?.id ?? "",
-            })
-            .returning();
+      // Create the guild
+      const guild = await db
+        .insert(guilds)
+        .values({
+          name,
+          ownerId: user?.id ?? "",
+        })
+        .returning();
 
-          const guildId = guild[0].id;
+      const guildId = guild[0].id;
 
-          // Add owner to the guild as a member
-          await db.insert(guildUsers).values({
-            guildId,
-            userId: user?.id ?? "",
-          });
+      // Add owner to the guild as a member
+      await db.insert(guildMembers).values({
+        guildId,
+        userId: user?.id ?? "",
+      });
 
-          // Create the default category
-          const category = await db
-            .insert(categories)
-            .values({
-              name: "Text channels", // Default category name
-              guildId,
-            })
-            .returning();
+      // Create the default category
+      const category = await db
+        .insert(categories)
+        .values({
+          name: "Text channels", // Default category name
+          guildId,
+        })
+        .returning();
 
-          const categoryId = category[0].id;
+      const categoryId = category[0].id;
 
-          // Create the default "General" channel within the category
-          const channel = await db
-            .insert(channels)
-            .values({
-              name: "General", // Default channel name
-              categoryId,
-            })
-            .returning();
+      // Create the default "General" channel within the category
+      const channel = await db
+        .insert(channels)
+        .values({
+          name: "General", // Default channel name
+          categoryId,
+        })
+        .returning();
 
-          return {
-            guild: guild[0],
-            defaultCategory: category[0],
-            defaultChannel: channel[0],
+      return {
+        guild: guild[0],
+        defaultCategory: category[0],
+        defaultChannel: channel[0],
+      };
+    },
+    {
+      body: t.Object({
+        name: t.String(),
+      }),
+    }
+  )
+
+  // Fetch all guilds the user is part of
+  .get("/guilds", async ({ user }) => {
+    const userGuilds = await db
+      .select()
+      .from(guilds)
+      .leftJoin(guildMembers, eq(guildMembers.guildId, guilds.id))
+      .where(eq(guildMembers.userId, user?.id ?? ""));
+
+    return userGuilds;
+  })
+
+  // Get details of a specific guild
+  .get("/guilds/:guildId", async ({ params }) => {
+    const { guildId } = params;
+
+    const guild = await db.select().from(guilds).where(eq(guilds.id, guildId));
+
+    return guild[0];
+  })
+
+  // Get all categories and their channels in a guild
+  .get(
+    "/guilds/:guildId/categories",
+    async ({
+      params,
+    }): Promise<
+      Array<{
+        id: string;
+        name: string;
+        guildId: string;
+        createdAt: Date;
+        updatedAt: Date;
+        channels: Array<{
+          id: string;
+          name: string;
+          categoryId: string;
+          createdAt: Date;
+          updatedAt: Date;
+        }>;
+      }>
+    > => {
+      const { guildId } = params;
+
+      const categoriesWithChannels = await db
+        .select({
+          category: categories,
+          channels: channels,
+        })
+        .from(categories)
+        .leftJoin(channels, eq(channels.categoryId, categories.id))
+        .where(eq(categories.guildId, guildId));
+
+      // Group channels by category
+      const groupedByCategory = categoriesWithChannels.reduce<
+        Record<
+          string,
+          {
+            id: string;
+            name: string;
+            guildId: string;
+            createdAt: Date;
+            updatedAt: Date;
+            channels: Array<{
+              id: string;
+              name: string;
+              categoryId: string;
+              createdAt: Date;
+              updatedAt: Date;
+            }>;
+          }
+        >
+      >((acc, row) => {
+        const categoryId = row.category.id;
+        if (!acc[categoryId]) {
+          acc[categoryId] = {
+            ...row.category,
+            channels: [],
           };
-        },
-        {
-          body: t.Object({
-            name: t.String(),
-          }),
         }
-      )
-
-      // Fetch all guilds the user is part of
-      .get("/", async ({ user }) => {
-        const userGuilds = await db
-          .select()
-          .from(guilds)
-          .leftJoin(guildUsers, eq(guildUsers.guildId, guilds.id))
-          .where(eq(guildUsers.userId, user?.id ?? ""));
-
-        return userGuilds;
-      })
-
-      // Get details of a specific guild
-      .get("/:guildId", async ({ params }) => {
-        const { guildId } = params;
-
-        const guild = await db
-          .select()
-          .from(guilds)
-          .where(eq(guilds.id, guildId));
-
-        return guild[0];
-      })
-
-      // Update a guild
-      .patch(
-        "/:guildId",
-        async ({ params, body }) => {
-          const { guildId } = params;
-          const { name } = body;
-
-          const updatedGuild = await db
-            .update(guilds)
-            .set({ name })
-            .where(eq(guilds.id, guildId))
-            .returning();
-          return updatedGuild[0];
-        },
-        {
-          body: t.Object({
-            name: t.String(),
-          }),
+        if (row.channels) {
+          acc[categoryId].channels.push(row.channels);
         }
-      )
+        return acc;
+      }, {});
 
-      // Delete a guild
-      .delete("/:guildId", async ({ params }) => {
-        const { guildId } = params;
+      return Object.values(groupedByCategory);
+    },
+    {
+      params: t.Object({
+        guildId: t.String(),
+      }),
+    }
+  )
 
-        await db.delete(guilds).where(eq(guilds.id, guildId));
-        return { message: "Guild deleted successfully" };
-      })
+  // Update a guild
+  .patch(
+    "/guilds/:guildId",
+    async ({ params, body }) => {
+      const { guildId } = params;
+      const { name } = body;
 
-      // Create a category in a guild
-      .post(
-        "/:guildId/categories",
-        async ({ params, body }) => {
-          const { guildId } = params;
-          const { name } = body;
+      const updatedGuild = await db
+        .update(guilds)
+        .set({ name })
+        .where(eq(guilds.id, guildId))
+        .returning();
+      return updatedGuild[0];
+    },
+    {
+      body: t.Object({
+        name: t.String(),
+      }),
+    }
+  )
 
-          const category = await db
-            .insert(categories)
-            .values({
-              name,
-              guildId,
-            })
-            .returning();
+  // Delete a guild
+  .delete("/guilds/:guildId", async ({ params }) => {
+    const { guildId } = params;
 
-          return category[0];
-        },
-        {
-          body: t.Object({
-            name: t.String(),
-          }),
-        }
-      )
+    await db.delete(guilds).where(eq(guilds.id, guildId));
+    return { message: "Guild deleted successfully" };
+  })
 
-      // Create a channel in a category
-      .post(
-        "/:guildId/categories/:categoryId/channels",
-        async ({ params, body }) => {
-          const { categoryId } = params;
-          const { name } = body;
+  // Create a category in a guild
+  .post(
+    "/guilds/:guildId/categories",
+    async ({ params, body }) => {
+      const { guildId } = params;
+      const { name } = body;
 
-          const channel = await db
-            .insert(channels)
-            .values({
-              name,
-              categoryId,
-            })
-            .returning();
+      const category = await db
+        .insert(categories)
+        .values({
+          name,
+          guildId,
+        })
+        .returning();
 
-          return channel[0];
-        },
-        {
-          body: t.Object({
-            name: t.String(),
-          }),
-        }
-      )
+      return category[0];
+    },
+    {
+      body: t.Object({
+        name: t.String(),
+      }),
+    }
+  )
+
+  // Create a channel in a category
+  .post(
+    "/guilds/:guildId/categories/:categoryId/channels",
+    async ({ params, body }) => {
+      const { categoryId } = params;
+      const { name } = body;
+
+      const channel = await db
+        .insert(channels)
+        .values({
+          name,
+          categoryId,
+        })
+        .returning();
+
+      return channel[0];
+    },
+    {
+      body: t.Object({
+        name: t.String(),
+      }),
+    }
   );

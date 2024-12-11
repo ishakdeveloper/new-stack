@@ -5,7 +5,7 @@ import {
   dmChannels,
   dmChannelUsers,
   messages,
-  guildUsers,
+  guildMembers,
 } from "../database/schema";
 import { eq, sql, desc } from "drizzle-orm";
 
@@ -78,7 +78,7 @@ export const directMessageRoutes = new Elysia()
         "/channel/:channelId/messages",
         async ({ params, body, user }) => {
           const { channelId } = params;
-          const { text } = body;
+          const { content } = body;
 
           // Ensure the user is part of the DM
           const dmMembership = await db
@@ -98,8 +98,8 @@ export const directMessageRoutes = new Elysia()
           const message = await db
             .insert(messages)
             .values({
-              text,
-              senderId: user?.id ?? "",
+              content,
+              authorId: user?.id ?? "",
               channelId,
             })
             .returning();
@@ -108,7 +108,7 @@ export const directMessageRoutes = new Elysia()
         },
         {
           body: t.Object({
-            text: t.String(),
+            content: t.String(),
           }),
           params: t.Object({
             channelId: t.String(),
@@ -207,7 +207,7 @@ export const groupDmRoutes = new Elysia()
         "/channel/:channelId/messages",
         async ({ params, body, user }) => {
           const { channelId } = params;
-          const { text } = body;
+          const { content } = body;
 
           // Ensure the user is part of the Group DM
           const dmMembership = await db
@@ -227,8 +227,8 @@ export const groupDmRoutes = new Elysia()
           const message = await db
             .insert(messages)
             .values({
-              text,
-              senderId: user?.id ?? "",
+              content,
+              authorId: user?.id ?? "",
               channelId,
             })
             .returning();
@@ -237,7 +237,7 @@ export const groupDmRoutes = new Elysia()
         },
         {
           body: t.Object({
-            text: t.String(),
+            content: t.String(),
           }),
           params: t.Object({
             channelId: t.String(),
@@ -255,15 +255,15 @@ export const guildChannelRoutes = new Elysia()
         "/:channelId/messages",
         async ({ params, body, user }) => {
           const { guildId, channelId } = params;
-          const { text } = body;
+          const { content } = body;
 
           // Ensure the user is part of the guild
           const guildMembership = await db
             .select()
-            .from(guildUsers)
+            .from(guildMembers)
             .where(
-              sql`${eq(guildUsers.guildId, guildId)} AND 
-              ${eq(guildUsers.userId, user?.id ?? "")}`
+              sql`${eq(guildMembers.guildId, guildId)} AND 
+              ${eq(guildMembers.userId, user?.id ?? "")}`
             )
             .limit(1);
 
@@ -275,8 +275,8 @@ export const guildChannelRoutes = new Elysia()
           const message = await db
             .insert(messages)
             .values({
-              text,
-              senderId: user?.id ?? "",
+              content,
+              authorId: user?.id ?? "",
               channelId,
             })
             .returning();
@@ -285,7 +285,7 @@ export const guildChannelRoutes = new Elysia()
         },
         {
           body: t.Object({
-            text: t.String(),
+            content: t.String(),
           }),
           params: t.Object({
             channelId: t.String(),
@@ -303,10 +303,10 @@ export const guildChannelRoutes = new Elysia()
           // Ensure the user is part of the guild
           const guildMembership = await db
             .select()
-            .from(guildUsers)
+            .from(guildMembers)
             .where(
-              sql`${eq(guildUsers.guildId, guildId)} AND 
-              ${eq(guildUsers.userId, user?.id ?? "")}`
+              sql`${eq(guildMembers.guildId, guildId)} AND 
+              ${eq(guildMembers.userId, user?.id ?? "")}`
             )
             .limit(1);
 

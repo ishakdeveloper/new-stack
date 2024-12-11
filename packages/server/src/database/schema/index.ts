@@ -15,27 +15,41 @@ import { t } from "elysia";
 
 // Guilds Table
 export const guilds = pgTable("guilds", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  name: text("name").notNull(),
-  createdAt: timestamp("createdAt").notNull().defaultNow(),
-  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+  id: uuid("id").defaultRandom().primaryKey(), // Unique Guild ID
+  name: text("name").notNull(), // Guild name
+  iconUrl: text("iconUrl"), // Optional Guild icon
   ownerId: text("ownerId")
     .notNull()
-    .references(() => user.id), // Owner of the guild
+    .references(() => user.id), // Guild owner
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
 });
 
+export const GuildSchema = createSelectSchema(guilds);
+export const GuildCreateSchema = t.Omit(GuildSchema, [
+  "id",
+  "createdAt",
+  "updatedAt",
+]);
+
 // Guild-Users Table (Many-to-Many)
-export const guildUsers = pgTable("guild_users", {
+export const guildMembers = pgTable("guild_members", {
   id: uuid("id").defaultRandom().primaryKey(),
   guildId: uuid("guildId")
     .notNull()
-    .references(() => guilds.id),
+    .references(() => guilds.id), // Reference to Guild
   userId: text("userId")
     .notNull()
-    .references(() => user.id),
-  roleId: uuid("roleId").references(() => roles.id), // Role assigned to the user in the guild
-  createdAt: timestamp("createdAt").notNull().defaultNow(),
+    .references(() => user.id), // Reference to User
+  roleIds: text("roleIds").array(), // Array of Role IDs assigned to the member
+  joinedAt: timestamp("joinedAt").notNull().defaultNow(),
 });
+
+export const GuildMemberSchema = createSelectSchema(guildMembers);
+export const GuildMemberCreateSchema = t.Omit(GuildMemberSchema, [
+  "id",
+  "joinedAt",
+]);
 
 // Categories Table
 export const categories = pgTable("categories", {
@@ -48,6 +62,13 @@ export const categories = pgTable("categories", {
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
 });
 
+export const CategorySchema = createSelectSchema(categories);
+export const CategoryCreateSchema = t.Omit(CategorySchema, [
+  "id",
+  "createdAt",
+  "updatedAt",
+]);
+
 // Channels (Rooms) Table
 export const channels = pgTable("channels", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -59,6 +80,13 @@ export const channels = pgTable("channels", {
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
 });
 
+export const ChannelSchema = createSelectSchema(channels);
+export const ChannelCreateSchema = t.Omit(ChannelSchema, [
+  "id",
+  "createdAt",
+  "updatedAt",
+]);
+
 export const dmChannels = pgTable("dm_channels", {
   id: uuid("id").defaultRandom().primaryKey(),
   name: text("name"), // Optional for group DMs
@@ -68,6 +96,12 @@ export const dmChannels = pgTable("dm_channels", {
     .references(() => user.id), // Creator of the DM or group DM
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 });
+
+export const DMChannelSchema = createSelectSchema(dmChannels);
+export const DMChannelCreateSchema = t.Omit(DMChannelSchema, [
+  "id",
+  "createdAt",
+]);
 
 // DM Channel Users Table (Many-to-Many)
 export const dmChannelUsers = pgTable("dm_channel_users", {
@@ -81,41 +115,68 @@ export const dmChannelUsers = pgTable("dm_channel_users", {
   joinedAt: timestamp("joinedAt").notNull().defaultNow(),
 });
 
+export const DMChannelUserSchema = createSelectSchema(dmChannelUsers);
+export const DMChannelUserCreateSchema = t.Omit(DMChannelUserSchema, [
+  "id",
+  "joinedAt",
+]);
+
 export const roles = pgTable("roles", {
   id: uuid("id").defaultRandom().primaryKey(),
-  name: text("name").notNull(), // Role name
   guildId: uuid("guildId")
     .notNull()
-    .references(() => guilds.id), // Role belongs to a specific guild
-  isDefault: boolean("isDefault").notNull().default(false), // Default role (e.g., "Member")
+    .references(() => guilds.id), // Role belongs to a guild
+  name: text("name").notNull(), // Role name
+  color: integer("color"), // Optional role color
+  isDefault: boolean("isDefault").notNull().default(false), // True for default "Member" role
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 });
+
+export const RoleSchema = createSelectSchema(roles);
+export const RoleCreateSchema = t.Omit(RoleSchema, ["id", "createdAt"]);
 
 // Friendships Table
 export const friendships = pgTable("friendships", {
   id: uuid("id").defaultRandom().primaryKey(),
   requesterId: text("requesterId")
     .notNull()
-    .references(() => user.id),
+    .references(() => user.id), // User who sent the friend request
   addresseeId: text("addresseeId")
     .notNull()
-    .references(() => user.id),
+    .references(() => user.id), // User who received the friend request
   status: varchar("status", { length: 20 }).notNull().default("pending"), // "pending", "accepted", "declined"
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
 });
 
+export const FriendshipSchema = createSelectSchema(friendships);
+export const FriendshipCreateSchema = t.Omit(FriendshipSchema, [
+  "id",
+  "createdAt",
+  "updatedAt",
+  "status",
+]);
+
 // Messages Table
 export const messages = pgTable("messages", {
   id: uuid("id").defaultRandom().primaryKey(),
-  text: text("text").notNull(),
-  senderId: text("senderId")
+  channelId: uuid("channelId").references(() => channels.id), // Reference for Guild messages
+  dmChannelId: uuid("dmChannelId").references(() => dmChannels.id), // Reference for DM messages
+  authorId: text("authorId")
     .notNull()
-    .references(() => user.id), // Sender of the message
-  channelId: uuid("channelId").references(() => dmChannels.id),
+    .references(() => user.id), // User who sent the message
+  content: text("content"), // Message text
+  attachments: text("attachments").array(), // Array of file URLs
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
 });
+
+export const MessageSchema = createSelectSchema(messages);
+export const MessageCreateSchema = t.Omit(MessageSchema, [
+  "id",
+  "createdAt",
+  "updatedAt",
+]);
 
 export const guildInviteLinks = pgTable("guild_invite_links", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -133,6 +194,14 @@ export const guildInviteLinks = pgTable("guild_invite_links", {
   expiresAt: timestamp("expiresAt"), // Optional: expiration time for the link
 });
 
+export const GuildInviteLinkSchema = createSelectSchema(guildInviteLinks);
+export const GuildInviteLinkCreateSchema = t.Omit(GuildInviteLinkSchema, [
+  "id",
+  "createdAt",
+  "uses",
+  "status",
+]);
+
 export const inviteLinkUsages = pgTable("invite_link_usages", {
   id: uuid("id").defaultRandom().primaryKey(),
   inviteLinkId: uuid("inviteLinkId")
@@ -143,6 +212,12 @@ export const inviteLinkUsages = pgTable("invite_link_usages", {
     .references(() => user.id), // User who used the invite link
   usedAt: timestamp("usedAt").notNull().defaultNow(), // Time of usage
 });
+
+export const InviteLinkUsageSchema = createSelectSchema(inviteLinkUsages);
+export const InviteLinkUsageCreateSchema = t.Omit(InviteLinkUsageSchema, [
+  "id",
+  "usedAt",
+]);
 
 export const guildInviteLinksRelations = relations(
   guildInviteLinks,
@@ -160,9 +235,10 @@ export const inviteLinkUsagesRelations = relations(
     invitedUser: one(user), // Tracks which user used the invite
   })
 );
+
 // User Relationships
 export const userRelations = relations(user, ({ many, one }) => ({
-  guildUsers: many(guildUsers), // Users can join multiple guilds through this table
+  guildMembers: many(guildMembers), // Users can join multiple guilds through this table
   ownedGuilds: many(guilds, { relationName: "ownedGuilds" }), // Guilds where the user is the owner
   messagesSent: many(messages), // Messages the user has sent
   dmChannels: many(dmChannelUsers), // Direct Messages or Group DMs the user is a part of
@@ -179,14 +255,14 @@ export const guildRelations = relations(guilds, ({ one, many }) => ({
     references: [user.id],
     relationName: "guildOwner",
   }), // The owner of the guild
-  members: many(guildUsers), // Users participating in the guild
+  members: many(guildMembers), // Users participating in the guild
   categories: many(categories), // Categories within the guild
   roles: many(roles), // Roles available in the guild
   inviteLinks: many(guildInviteLinks), // Invite links created for the guild
 }));
 
 // Update Guild-User Relationships
-export const guildUsersRelations = relations(guildUsers, ({ one }) => ({
+export const guildMembersRelations = relations(guildMembers, ({ one }) => ({
   guild: one(guilds), // Automatically connects via guildId
   user: one(user), // Automatically connects via userId
   role: one(roles), // Automatically connects via roleId
@@ -214,5 +290,5 @@ export const messageRelations = relations(messages, ({ one }) => ({
 // Role Relationships
 export const roleRelations = relations(roles, ({ many, one }) => ({
   guild: one(guilds), // Role belongs to a specific guild
-  users: many(guildUsers), // Users assigned this role
+  users: many(guildMembers), // Users assigned this role
 }));
