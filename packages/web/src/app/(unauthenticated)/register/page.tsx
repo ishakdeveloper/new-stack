@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Icons } from "@/components/ui/icons";
 import { authClient } from "@/utils/authClient";
-
+import { useUserStore } from "@/stores/useUserStore";
 type FormData = {
   name: string;
   email: string;
@@ -24,6 +24,7 @@ type FormData = {
 };
 
 export default function RegisterPage() {
+  const setCurrentUser = useUserStore((state) => state.setCurrentUser);
   const router = useRouter();
   const {
     register,
@@ -38,12 +39,21 @@ export default function RegisterPage() {
     // Add your registration logic here
     await new Promise((resolve) => setTimeout(resolve, 3000));
 
-    await authClient.signUp.email({
-      name: data.name,
-      email: data.email,
-      password: data.password,
-      callbackURL: "/channels/me",
-    });
+    await authClient.signUp
+      .email({
+        name: data.name,
+        email: data.email,
+        password: data.password,
+        callbackURL: "/channels/me",
+      })
+      .then((user) => {
+        setCurrentUser({
+          id: user.data?.user.id ?? "",
+          email: user.data?.user.email ?? "",
+          name: user.data?.user.name ?? "",
+          image: user.data?.user.image ?? "",
+        });
+      });
 
     router.push("/channels/me");
   };

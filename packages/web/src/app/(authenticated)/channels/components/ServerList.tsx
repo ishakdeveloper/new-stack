@@ -17,9 +17,22 @@ import { client } from "@/utils/client";
 import { authClient } from "@/utils/authClient";
 import { useGuildStore } from "@/stores/useGuildStore";
 import { useRouter } from "next/navigation";
+import {
+  Dialog,
+  DialogDescription,
+  DialogTitle,
+  DialogContent,
+  DialogTrigger,
+  DialogHeader,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { CreateGuildModal } from "./CreateGuildModal";
+import { useUserStore } from "@/stores/useUserStore";
 
 export default function ServerList() {
-  const session = authClient.useSession();
+  const currentUser = useUserStore((state) => state.currentUser);
   const queryClient = useQueryClient();
   const setCurrentGuildId = useGuildStore((state) => state.setCurrentGuildId);
   const lastVisitedChannels = useGuildStore(
@@ -27,7 +40,7 @@ export default function ServerList() {
   );
   const router = useRouter();
   const { data: guilds, isLoading } = useQuery({
-    queryKey: ["guilds", session.data?.user?.id],
+    queryKey: ["guilds", currentUser?.id],
     queryFn: async () => {
       const res = await client.api.guilds.get();
       return res.data;
@@ -36,8 +49,14 @@ export default function ServerList() {
 
   const handleGuildClick = (guildId: string) => {
     setCurrentGuildId(guildId);
-    router.push(`/channels/${guildId}/${lastVisitedChannels[guildId]}`);
+
+    if (lastVisitedChannels[guildId]) {
+      router.push(`/channels/${guildId}/${lastVisitedChannels[guildId]}`);
+    } else {
+      router.push(`/channels/${guildId}/`);
+    }
   };
+
   return (
     <div className="w-20 border-r flex flex-col items-center py-4 space-y-4">
       <TooltipProvider>
@@ -81,20 +100,8 @@ export default function ServerList() {
             </Tooltip>
           ))
         )}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="outline"
-              size="icon"
-              className="rounded-full bg-primary/10 hover:bg-primary/20"
-            >
-              <Plus className="h-4 w-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="right">
-            <p>Add a server</p>
-          </TooltipContent>
-        </Tooltip>
+
+        <CreateGuildModal />
       </TooltipProvider>
     </div>
   );

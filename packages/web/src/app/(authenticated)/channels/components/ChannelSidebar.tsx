@@ -1,33 +1,39 @@
-"use client";
-
-import { Hash, Mic, Settings } from "lucide-react";
-
-import { ScrollArea } from "@/components/ui/scroll-area";
-
-import { AvatarFallback } from "@/components/ui/avatar";
-import { Avatar } from "@/components/ui/avatar";
-import { Tooltip } from "@/components/ui/tooltip";
+import React, { useEffect } from "react";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { Plus } from "lucide-react";
-import React, { useEffect } from "react";
-import LoggedInUserBox from "./LoggedInUserBox";
+  ChevronDown,
+  FolderPlus,
+  Hash,
+  Pencil,
+  Plus,
+  Settings,
+  Trash,
+} from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { useGuildStore } from "@/stores/useGuildStore";
 import { client } from "@/utils/client";
 import { useQuery } from "@tanstack/react-query";
-import { useGuildStore } from "@/stores/useGuildStore";
-import { useRouter } from "next/navigation";
-
-const channels = [
-  { id: 1, name: "general", type: "text" },
-  { id: 2, name: "random", type: "text" },
-  { id: 3, name: "Voice Chat", type: "voice" },
-];
+import { useUserStore } from "@/stores/useUserStore";
+import LoggedInUserBox from "./LoggedInUserBox";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuItem,
+  DropdownMenuContent,
+} from "@/components/ui/dropdown-menu";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 
 const ChannelSidebar = () => {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
   const currentGuildId = useGuildStore((state) => state.currentGuildId);
   const currentChannelId = useGuildStore((state) => state.currentChannelId);
   const setCurrentChannelId = useGuildStore(
@@ -36,7 +42,7 @@ const ChannelSidebar = () => {
   const setLastVisitedChannel = useGuildStore(
     (state) => state.setLastVisitedChannel
   );
-  const router = useRouter();
+
   const { data: channels } = useQuery({
     queryKey: ["channels", currentGuildId],
     queryFn: async () => {
@@ -49,8 +55,11 @@ const ChannelSidebar = () => {
   });
 
   useEffect(() => {
-    console.log(channels);
-  }, []);
+    const channelId = searchParams.get("channelId");
+    if (channelId) {
+      setCurrentChannelId(channelId);
+    }
+  }, [searchParams, setCurrentChannelId]);
 
   const handleChannelClick = (channelId: string) => {
     setCurrentChannelId(channelId);
@@ -59,30 +68,90 @@ const ChannelSidebar = () => {
   };
 
   return (
-    <div className="w-60 border-r flex flex-col">
-      <div className="p-4 font-bold border-b">Server Name</div>
-      <ScrollArea className="flex-grow">
-        <div className="p-2">
-          {channels?.map((category) => (
-            <div key={category.id}>
-              <div className="text-sm font-semibold mb-2">{category.name}</div>
-              {category.channels.map((channel) => (
-                <Button
-                  key={channel.id}
-                  variant="ghost"
-                  className={`w-full justify-start px-2 ${
-                    currentChannelId === channel.id ? "bg-accent" : ""
-                  }`}
-                  onClick={() => handleChannelClick(channel.id)}
-                >
-                  <Hash className="mr-2 h-4 w-4" />
-                  {channel.name}
-                </Button>
+    <div className="w-60 border-r flex flex-col h-full">
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <div className="p-4 font-bold border-b flex items-center justify-between cursor-pointer hover:bg-accent/50">
+            <span>Server Name</span>
+            <ChevronDown className="h-4 w-4" />
+          </div>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent className="w-60">
+          <DropdownMenuItem>
+            <Pencil className="mr-2 h-4 w-4" />
+            <span>Edit Server</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem>
+            <Settings className="mr-2 h-4 w-4" />
+            <span>Server Settings</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem>
+            <Plus className="mr-2 h-4 w-4" />
+            <span>Create Channel</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem>
+            <FolderPlus className="mr-2 h-4 w-4" />
+            <span>Create Category</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem className="text-red-600">
+            <Trash className="mr-2 h-4 w-4" />
+            <span>Delete Server</span>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <ContextMenu>
+        <ContextMenuTrigger className="flex-1">
+          <ScrollArea className="h-full">
+            <div className="p-2">
+              {channels?.map((category) => (
+                <div key={category.id}>
+                  <div className="text-sm font-semibold mb-2">
+                    {category.name}
+                  </div>
+                  {category.channels.map((channel) => (
+                    <ContextMenu key={channel.id}>
+                      <ContextMenuTrigger>
+                        <Button
+                          variant="ghost"
+                          className={`w-full justify-start px-2 ${
+                            currentChannelId === channel.id ? "bg-accent" : ""
+                          }`}
+                          onClick={() => handleChannelClick(channel.id)}
+                        >
+                          <Hash className="mr-2 h-4 w-4" />
+                          {channel.name}
+                        </Button>
+                      </ContextMenuTrigger>
+                      <ContextMenuContent>
+                        <ContextMenuItem>
+                          <Pencil className="mr-2 h-4 w-4" />
+                          Edit Channel
+                        </ContextMenuItem>
+                        <ContextMenuItem className="text-red-600">
+                          <Trash className="mr-2 h-4 w-4" />
+                          Delete Channel
+                        </ContextMenuItem>
+                      </ContextMenuContent>
+                    </ContextMenu>
+                  ))}
+                </div>
               ))}
             </div>
-          ))}
-        </div>
-      </ScrollArea>
+          </ScrollArea>
+        </ContextMenuTrigger>
+        <ContextMenuContent>
+          <ContextMenuItem>
+            <Plus className="mr-2 h-4 w-4" />
+            Create Channel
+          </ContextMenuItem>
+          <ContextMenuItem>
+            <FolderPlus className="mr-2 h-4 w-4" />
+            Create Category
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
+
       <LoggedInUserBox />
     </div>
   );

@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Icons } from "@/components/ui/icons";
 import { authClient } from "@/utils/authClient";
+import { useUserStore } from "@/stores/useUserStore";
 
 type FormData = {
   email: string;
@@ -24,6 +25,7 @@ type FormData = {
 };
 
 export default function LoginScreen() {
+  const setCurrentUser = useUserStore((state) => state.setCurrentUser);
   const {
     register,
     handleSubmit,
@@ -32,11 +34,20 @@ export default function LoginScreen() {
   } = useForm<FormData>();
 
   const onSubmit = async (data: FormData) => {
-    await authClient.signIn.email({
-      email: data.email,
-      password: data.password,
-      callbackURL: "/channels/me",
-    });
+    await authClient.signIn
+      .email({
+        email: data.email,
+        password: data.password,
+        callbackURL: "/channels/me",
+      })
+      .then((user) => {
+        setCurrentUser({
+          id: user.data?.user.id ?? "",
+          email: user.data?.user.email ?? "",
+          name: user.data?.user.name ?? "",
+          image: user.data?.user.image ?? "",
+        });
+      });
   };
 
   const handleSocialLogin = (provider: string) => {

@@ -6,16 +6,17 @@ import React from "react";
 import { Settings } from "lucide-react";
 import Link from "next/link";
 import { authClient } from "@/utils/authClient";
+import { useUserStore } from "@/stores/useUserStore";
 
 export default function LoggedInUserBox() {
-  const session = authClient.useSession();
+  const currentUser = useUserStore((state) => state.currentUser);
 
   return (
     <div className="p-4 border-t flex items-center">
       <Avatar className="h-8 w-8">
-        <AvatarFallback>{session?.data?.user?.name?.[0] ?? "U"}</AvatarFallback>
+        <AvatarFallback>{currentUser?.name?.[0] ?? "U"}</AvatarFallback>
       </Avatar>
-      <span className="ml-2 text-sm">{session?.data?.user?.name}</span>
+      <span className="ml-2 text-sm">{currentUser?.name}</span>
       <Link
         href="/channels/me/settings"
         className={buttonVariants({

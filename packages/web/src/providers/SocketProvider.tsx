@@ -21,24 +21,21 @@ type WebSocketMessage =
   | { op: "send_dm"; to_user_id: string; message: string }
   | { op: "send_global"; message: string };
 
-// WebSocket context shape
 type SocketContextType = {
   sendMessage: (message: WebSocketMessage) => void;
   lastMessage: MessageEvent<any> | null;
   isConnected: boolean;
 };
 
-// Context initialization
 const SocketContext = createContext<SocketContextType | undefined>(undefined);
 
 export const SocketProvider: React.FC<{
   children: React.ReactNode;
   session: Session | null;
 }> = ({ children, session }) => {
-  const socketUrl = "ws://localhost:4001/ws"; // Replace with your WebSocket URL
+  const socketUrl = "ws://localhost:4001/ws";
   const [shouldConnect, setShouldConnect] = useState(false);
 
-  // Initialize WebSocket connection using `react-use-websocket`
   const {
     sendMessage: sendRawMessage,
     lastMessage,
@@ -53,17 +50,15 @@ export const SocketProvider: React.FC<{
     share: true, // Share the WebSocket connection across components
   });
 
-  // Determine connection status
   const isConnected = readyState === ReadyState.OPEN;
 
-  // Handle `session` changes and send registration message
+  // Register user session in elixir websocket server
   useEffect(() => {
     if (isConnected && session) {
       sendMessage({ op: "register", user: session.user });
     }
   }, [isConnected, session]);
 
-  // Wrapper to send WebSocket messages as JSON
   const sendMessage = useCallback(
     (message: WebSocketMessage) => {
       if (isConnected) {
