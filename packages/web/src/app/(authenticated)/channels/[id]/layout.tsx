@@ -3,6 +3,7 @@
 import React, { useEffect } from "react";
 import ChannelSidebar from "../components/ChannelSidebar";
 import { useGuildStore } from "@/stores/useGuildStore";
+import MembersList from "../components/MembersList";
 
 export default function GuildLayout({
   children,
@@ -26,6 +27,7 @@ export default function GuildLayout({
     <div className="flex flex-1">
       <ChannelSidebar />
       {children}
+      <MembersList />
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { Settings } from "lucide-react";
 import Link from "next/link";
 import { authClient } from "@/utils/authClient";
 import { useUserStore } from "@/stores/useUserStore";
+import { ModeToggle } from "@/components/ThemeToggle";
 
 export default function LoggedInUserBox() {
   const currentUser = useUserStore((state) => state.currentUser);
@@ -27,6 +28,7 @@ export default function LoggedInUserBox() {
       >
         <Settings className="h-4 w-4" />
       </Link>
+      <ModeToggle />
     </div>
   );
 }

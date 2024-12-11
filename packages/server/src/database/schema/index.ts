@@ -77,9 +77,13 @@ export const CategoryCreateSchema = t.Omit(CategorySchema, [
 export const channels = pgTable("channels", {
   id: uuid("id").defaultRandom().primaryKey(),
   name: text("name").notNull(),
+  slug: text("slug").notNull(),
   categoryId: uuid("categoryId").references(() => categories.id, {
     onDelete: "cascade",
   }), // Channel can optionally belong to a category
+  guildId: uuid("guildId")
+    .notNull()
+    .references(() => guilds.id, { onDelete: "cascade" }), // Channel belongs to a guild
   position: integer("position").notNull().default(0),
   isPrivate: boolean("isPrivate").notNull().default(false),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
@@ -232,26 +236,50 @@ export const InviteLinkUsageCreateSchema = t.Omit(InviteLinkUsageSchema, [
 export const guildInviteLinksRelations = relations(
   guildInviteLinks,
   ({ one, many }) => ({
-    guild: one(guilds), // Invite belongs to a guild
-    inviter: one(user), // Invite was created by a user
-    usages: many(inviteLinkUsages), // Tracks all usages of this invite link
+    guild: one(guilds, {
+      fields: [guildInviteLinks.guildId],
+      references: [guilds.id],
+      relationName: "guildInvites",
+    }), // Invite belongs to a guild
+    inviter: one(user, {
+      fields: [guildInviteLinks.inviterId],
+      references: [user.id],
+      relationName: "createdInvites",
+    }), // Invite was created by a user
+    usages: many(inviteLinkUsages, {
+      relationName: "inviteLinkUsages",
+    }), // Tracks all usages of this invite link
   })
 );
 
 export const inviteLinkUsagesRelations = relations(
   inviteLinkUsages,
   ({ one }) => ({
-    inviteLink: one(guildInviteLinks), // Tracks which invite link was used
-    invitedUser: one(user), // Tracks which user used the invite
+    inviteLink: one(guildInviteLinks, {
+      fields: [inviteLinkUsages.inviteLinkId],
+      references: [guildInviteLinks.id],
+      relationName: "inviteLinkUsages",
+    }), // Tracks which invite link was used
+    invitedUser: one(user, {
+      fields: [inviteLinkUsages.invitedUserId],
+      references: [user.id],
+      relationName: "inviteUsages",
+    }), // Tracks which user used the invite
   })
 );
 
 // User Relationships
 export const userRelations = relations(user, ({ many, one }) => ({
-  guildMembers: many(guildMembers), // Users can join multiple guilds through this table
+  guildMembers: many(guildMembers, {
+    relationName: "userGuildMembers",
+  }), // Users can join multiple guilds through this table
   ownedGuilds: many(guilds, { relationName: "ownedGuilds" }), // Guilds where the user is the owner
-  messagesSent: many(messages), // Messages the user has sent
-  dmChannels: many(dmChannelUsers), // Direct Messages or Group DMs the user is a part of
+  messagesSent: many(messages, {
+    relationName: "authoredMessages",
+  }), // Messages the user has sent
+  dmChannels: many(dmChannelUsers, {
+    relationName: "dmChannelUsers",
+  }), // Direct Messages or Group DMs the user is a part of
   sentFriendRequests: many(friendships, { relationName: "sentFriendRequests" }),
   receivedFriendRequests: many(friendships, {
     relationName: "receivedFriendRequests",
@@ -263,42 +291,100 @@ export const guildRelations = relations(guilds, ({ one, many }) => ({
   owner: one(user, {
     fields: [guilds.ownerId],
     references: [user.id],
-    relationName: "guildOwner",
+    relationName: "ownedGuilds",
   }), // The owner of the guild
-  members: many(guildMembers), // Users participating in the guild
-  categories: many(categories), // Categories within the guild
-  roles: many(roles), // Roles available in the guild
-  inviteLinks: many(guildInviteLinks), // Invite links created for the guild
+  members: many(guildMembers, {
+    relationName: "guildMembers",
+  }), // Users participating in the guild
+  categories: many(categories, {
+    relationName: "guildCategories",
+  }), // Categories within the guild
+  roles: many(roles, {
+    relationName: "guildRoles",
+  }), // Roles available in the guild
+  inviteLinks: many(guildInviteLinks, {
+    relationName: "guildInvites",
+  }), // Invite links created for the guild
+  channels: many(channels, {
+    relationName: "guildChannels",
+  }), // Channels in the guild
 }));
 
 // Update Guild-User Relationships
 export const guildMembersRelations = relations(guildMembers, ({ one }) => ({
-  guild: one(guilds), // Automatically connects via guildId
-  user: one(user), // Automatically connects via userId
-  role: one(roles), // Automatically connects via roleId
+  guild: one(guilds, {
+    fields: [guildMembers.guildId],
+    references: [guilds.id],
+    relationName: "guildMembers",
+  }), // Automatically connects via guildId
+  user: one(user, {
+    fields: [guildMembers.userId],
+    references: [user.id],
+    relationName: "userGuildMembers",
+  }), // Automatically connects via userId
+  role: one(roles, {
+    fields: [guildMembers.roleIds],
+    references: [roles.id],
+    relationName: "memberRoles",
+  }), // Automatically connects via roleId
 }));
 
 // Category Relationships
 export const categoriesRelations = relations(categories, ({ many, one }) => ({
-  guild: one(guilds), // Automatically connects via guildId
-  channels: many(channels), // Connects via categoryId in channels
+  guild: one(guilds, {
+    fields: [categories.guildId],
+    references: [guilds.id],
+    relationName: "guildCategories",
+  }), // Automatically connects via guildId
+  channels: many(channels, {
+    relationName: "categoryChannels",
+  }), // Connects via categoryId in channels
 }));
 
 // Channel Relationships
 export const channelsRelations = relations(channels, ({ many, one }) => ({
-  category: one(categories), // Automatically connects via categoryId
-  messages: many(messages), // Connects via channelId in messages
+  category: one(categories, {
+    fields: [channels.categoryId],
+    references: [categories.id],
+    relationName: "categoryChannels",
+  }), // Automatically connects via categoryId
+  guild: one(guilds, {
+    fields: [channels.guildId],
+    references: [guilds.id],
+    relationName: "guildChannels",
+  }), // Channel belongs to a guild
+  messages: many(messages, {
+    relationName: "channelMessages",
+  }), // Connects via channelId in messages
 }));
 
 // Messages Relationships
 export const messageRelations = relations(messages, ({ one }) => ({
-  sender: one(user), // Automatically connects via senderId
-  recipient: one(user), // For 1-on-1 DMs, connects via recipientId
-  channel: one(channels), // For guild messages, connects via channelId
+  sender: one(user, {
+    fields: [messages.authorId],
+    references: [user.id],
+    relationName: "authoredMessages",
+  }), // Automatically connects via senderId
+  channel: one(channels, {
+    fields: [messages.channelId],
+    references: [channels.id],
+    relationName: "channelMessages",
+  }), // For guild messages, connects via channelId
+  dmChannel: one(dmChannels, {
+    fields: [messages.dmChannelId],
+    references: [dmChannels.id],
+    relationName: "dmChannelMessages",
+  }), // For DM messages, connects via dmChannelId
 }));
 
 // Role Relationships
 export const roleRelations = relations(roles, ({ many, one }) => ({
-  guild: one(guilds), // Role belongs to a specific guild
-  users: many(guildMembers), // Users assigned this role
+  guild: one(guilds, {
+    fields: [roles.guildId],
+    references: [guilds.id],
+    relationName: "guildRoles",
+  }), // Role belongs to a specific guild
+  users: many(guildMembers, {
+    relationName: "memberRoles",
+  }), // Users assigned this role
 }));

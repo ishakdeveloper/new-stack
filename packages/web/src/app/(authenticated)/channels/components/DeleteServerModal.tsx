@@ -17,12 +17,23 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useUserStore } from "@/stores/useUserStore";
 import { useState } from "react";
+import { useToast } from "@/hooks/use-toast";
 
-export function DeleteServerModal({ guildId }: { guildId: string }) {
+interface DeleteServerModalProps {
+  guildId: string;
+  open: boolean;
+  onClose: () => void;
+}
+
+export function DeleteServerModal({
+  guildId,
+  open,
+  onClose,
+}: DeleteServerModalProps) {
   const currentUser = useUserStore((state) => state.currentUser);
   const queryClient = useQueryClient();
-  const [open, setOpen] = useState(false);
   const router = useRouter();
+  const { toast } = useToast();
 
   const deleteServerMutation = useMutation({
     mutationFn: async () => {
@@ -31,8 +42,11 @@ export function DeleteServerModal({ guildId }: { guildId: string }) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["guilds", currentUser?.id] });
-      setOpen(false);
       router.push("/channels/me");
+      toast({
+        title: "Server deleted",
+        description: "Your server has been permanently deleted.",
+      });
     },
   });
 
@@ -45,12 +59,7 @@ export function DeleteServerModal({ guildId }: { guildId: string }) {
   };
 
   return (
-    <AlertDialog open={open} onOpenChange={setOpen}>
-      <AlertDialogTrigger asChild>
-        <Button variant="ghost" className="w-full justify-start text-red-600">
-          Delete Server
-        </Button>
-      </AlertDialogTrigger>
+    <AlertDialog open={open}>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
@@ -60,7 +69,7 @@ export function DeleteServerModal({ guildId }: { guildId: string }) {
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogCancel onClick={onClose}>Cancel</AlertDialogCancel>
           <AlertDialogAction
             onClick={handleDelete}
             disabled={deleteServerMutation.isPending}

@@ -1,156 +1,120 @@
 import Elysia, { t } from "elysia";
 import { userMiddleware } from "../middlewares/userMiddleware";
 import { categories, guildMembers, guilds } from "../database/schema";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { channels } from "../database/schema";
 import db from "../database/db";
+import { generateChannelSlug } from "../lib/generateChannelSlug";
 
 export const channelRoutes = new Elysia()
   .derive(({ request }) => userMiddleware(request))
   // Get all categories and their channels for a guild
-  .get("/channels/:guildId/categories", async ({ params }) => {
-    const { guildId } = params;
-
-    const categoriesWithChannels = await db.query.categories.findMany({
-      where: eq(categories.guildId, guildId),
-      with: {
-        channels: { orderBy: (channels, { asc }) => [asc(channels.position)] },
-      },
-    });
-
-    const uncategorizedChannels = await db.query.channels.findMany({
-      where: eq(channels.categoryId, null as any),
-      orderBy: (channels, { asc }) => [asc(channels.position)],
-    });
-
-    return {
-      categories: categoriesWithChannels,
-      uncategorized: uncategorizedChannels,
-    };
-  })
-  // Get all categories and their channels in a guild
   .get(
-    "/guilds/:guildId/categories",
-    async ({
-      params,
-    }): Promise<
-      Array<{
-        id: string;
-        name: string;
-        guildId: string;
-        createdAt: Date;
-        updatedAt: Date;
-        channels: Array<{
-          id: string;
-          name: string;
-          categoryId: string;
-          createdAt: Date;
-          updatedAt: Date;
-        }>;
-      }>
-    > => {
+    "/guilds/:guildId/channels",
+    async ({ params }) => {
       const { guildId } = params;
 
-      const categoriesWithChannels = await db
-        .select({
-          category: categories,
-          channels: channels,
-        })
-        .from(categories)
-        .leftJoin(channels, eq(channels.categoryId, categories.id))
-        .where(eq(categories.guildId, guildId));
+      // Get channels without a category but belonging to this guild
+      const uncategorizedChannels = await db.query.channels.findMany({
+        where: and(isNull(channels.categoryId), eq(channels.guildId, guildId)),
+      });
 
-      // Group channels by category
-      const groupedByCategory = categoriesWithChannels.reduce<
-        Record<
-          string,
-          {
-            id: string;
-            name: string;
-            guildId: string;
-            createdAt: Date;
-            updatedAt: Date;
-            channels: Array<{
-              id: string;
-              name: string;
-              categoryId: string;
-              createdAt: Date;
-              updatedAt: Date;
-            }>;
-          }
-        >
-      >((acc, row) => {
-        const categoryId = row.category.id;
-        if (!acc[categoryId]) {
-          acc[categoryId] = {
-            ...row.category,
-            channels: [],
-          };
-        }
-        if (row.channels && row.channels.categoryId) {
-          acc[categoryId].channels.push({
-            id: row.channels.id,
-            name: row.channels.name,
-            categoryId: row.channels.categoryId,
-            createdAt: row.channels.createdAt,
-            updatedAt: row.channels.updatedAt,
-          });
-        }
-        return acc;
-      }, {});
+      // Get categories with their channels for this guild
+      const categorizedChannels = await db.query.categories.findMany({
+        where: eq(categories.guildId, guildId),
+        with: {
+          channels: {
+            where: eq(channels.guildId, guildId),
+          },
+        },
+      });
 
-      return Object.values(groupedByCategory);
+      return {
+        categorized: categorizedChannels,
+        uncategorized: uncategorizedChannels,
+      };
     },
     {
       params: t.Object({
         guildId: t.String(),
       }),
-    }
-  )
-
-  // Update a guild
-  .patch(
-    "/guilds/:guildId",
-    async ({ params, body }) => {
-      const { guildId } = params;
-      const { name } = body;
-
-      const updatedGuild = await db
-        .update(guilds)
-        .set({ name })
-        .where(eq(guilds.id, guildId))
-        .returning();
-      return updatedGuild[0];
-    },
-    {
-      body: t.Object({
-        name: t.String(),
+      response: t.Object({
+        categorized: t.Array(
+          t.Object({
+            id: t.String(),
+            name: t.String(),
+            guildId: t.String(),
+            position: t.Number(),
+            isPrivate: t.Boolean(),
+            createdAt: t.Date(),
+            updatedAt: t.Date(),
+            channels: t.Array(
+              t.Object({
+                id: t.String(),
+                name: t.String(),
+                categoryId: t.Union([t.String(), t.Null()]),
+                guildId: t.String(),
+                slug: t.String(),
+                position: t.Number(),
+                isPrivate: t.Boolean(),
+                createdAt: t.Date(),
+                updatedAt: t.Date(),
+              })
+            ),
+          })
+        ),
+        uncategorized: t.Array(
+          t.Object({
+            id: t.String(),
+            name: t.String(),
+            categoryId: t.Union([t.String(), t.Null()]),
+            guildId: t.String(),
+            slug: t.String(),
+            position: t.Number(),
+            isPrivate: t.Boolean(),
+            createdAt: t.Date(),
+            updatedAt: t.Date(),
+          })
+        ),
       }),
     }
   )
+  // Get a single channel
+  .get(
+    "/guilds/:guildId/channels/:channelId",
+    async ({ params }) => {
+      const { channelId, guildId } = params;
 
-  // Delete a guild
-  .delete("/guilds/:guildId", async ({ params }) => {
-    const { guildId } = params;
+      const channel = await db
+        .select()
+        .from(channels)
+        .where(and(eq(channels.id, channelId), eq(channels.guildId, guildId)))
+        .limit(1);
 
-    await db.delete(guilds).where(eq(guilds.id, guildId));
-    return { message: "Guild deleted successfully" };
-  })
+      if (!channel.length) {
+        throw new Error("Channel not found");
+      }
 
-  // Leave a guild
-  .delete("/guilds/:guildId/leave", async ({ params, user }) => {
-    const { guildId } = params;
-
-    await db
-      .delete(guildMembers)
-      .where(
-        eq(guildMembers.guildId, guildId) &&
-          eq(guildMembers.userId, user?.id ?? "")
-      );
-
-    return { message: "Left guild successfully" };
-  })
-
+      return channel[0];
+    },
+    {
+      params: t.Object({
+        guildId: t.String(),
+        channelId: t.String(),
+      }),
+      response: t.Object({
+        id: t.String(),
+        name: t.String(),
+        slug: t.String(),
+        categoryId: t.Union([t.String(), t.Null()]),
+        guildId: t.String(),
+        position: t.Number(),
+        isPrivate: t.Boolean(),
+        createdAt: t.Date(),
+        updatedAt: t.Date(),
+      }),
+    }
+  )
   // Create a category in a guild
   .post(
     "/guilds/:guildId/categories",
@@ -179,14 +143,17 @@ export const channelRoutes = new Elysia()
   .post(
     "/guilds/:guildId/categories/:categoryId/channels",
     async ({ params, body }) => {
-      const { categoryId } = params;
+      const { categoryId, guildId } = params;
       const { name } = body;
+      const slug = generateChannelSlug(name);
 
       const channel = await db
         .insert(channels)
         .values({
           name,
           categoryId,
+          guildId,
+          slug,
         })
         .returning();
 
@@ -204,15 +171,21 @@ export const channelRoutes = new Elysia()
     async ({ params, body }) => {
       const { guildId } = params;
       const { name, categoryId, position, isPrivate } = body;
+      const slug = generateChannelSlug(name);
 
-      const newChannel = await db.insert(channels).values({
-        name,
-        categoryId,
-        position,
-        isPrivate,
-      });
+      const newChannel = await db
+        .insert(channels)
+        .values({
+          name,
+          guildId,
+          categoryId: categoryId || null,
+          position,
+          isPrivate,
+          slug,
+        })
+        .returning();
 
-      return newChannel;
+      return newChannel[0];
     },
     {
       body: t.Object({
@@ -220,6 +193,9 @@ export const channelRoutes = new Elysia()
         categoryId: t.Optional(t.String()),
         position: t.Optional(t.Number()),
         isPrivate: t.Optional(t.Boolean()),
+      }),
+      params: t.Object({
+        guildId: t.String(),
       }),
     }
   )

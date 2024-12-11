@@ -27,6 +27,7 @@ import { useUserStore } from "@/stores/useUserStore";
 import { useState } from "react";
 import { Icons } from "@/components/ui/icons";
 import { useGuildStore } from "@/stores/useGuildStore";
+import { useToast } from "@/hooks/use-toast";
 
 const createGuildSchema = z.object({
   name: z.string().min(1, "Name is required").max(100),
@@ -38,6 +39,7 @@ export function CreateGuildModal() {
   const currentUser = useUserStore((state) => state.currentUser);
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
+  const { toast } = useToast();
   const {
     register,
     handleSubmit,
@@ -71,6 +73,10 @@ export function CreateGuildModal() {
         data?.defaultChannel.id ?? ""
       );
       router.push(`/channels/${data?.guild.id}/${data?.defaultChannel.id}`);
+      toast({
+        title: "Server Created",
+        description: `Successfully created server "${data?.guild.name}"`,
+      });
     },
   });
 

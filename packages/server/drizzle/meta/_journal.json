@@ -29,6 +29,20 @@
       "when": 1733918552321,
       "tag": "0003_nifty_natasha_romanoff",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1733924224362,
+      "tag": "0004_sour_bucky",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1733927716859,
+      "tag": "0005_worthless_the_hunter",
+      "breakpoints": true
     }
   ]
 }

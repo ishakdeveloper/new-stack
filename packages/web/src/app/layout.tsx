@@ -5,6 +5,8 @@ import { client } from "@/utils/client";
 import { headers } from "next/headers";
 import { authClient } from "@/utils/authClient";
 import { SocketProvider } from "@/providers/SocketProvider";
+import { Toaster } from "@/components/ui/toaster";
+import { ThemeProvider } from "@/providers/ThemeProvider";
 
 export const metadata = {
   title: "Create Next App",
@@ -27,8 +29,8 @@ export default async function RootLayout({
       <body className="">
         <QueryProvider>
           <SocketProvider session={session?.data}>
-            
             {children}
+            <Toaster />
           </SocketProvider>
         </QueryProvider>
       </body>

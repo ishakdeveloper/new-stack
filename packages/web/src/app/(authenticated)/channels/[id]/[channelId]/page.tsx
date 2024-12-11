@@ -2,6 +2,7 @@
 
 import React, { useEffect } from "react";
 import { useGuildStore } from "@/stores/useGuildStore";
+import ChatArea from "../../components/ChatArea";
 
 export default function ChannelPage({
   params,
@@ -20,8 +21,8 @@ export default function ChannelPage({
   }, [params, setCurrentChannelId]);
 
   return (
-    <div>
-      <h1>{currentChannelId}</h1>
-    </div>
+    <>
+      <ChatArea />
+    </>
   );
 }

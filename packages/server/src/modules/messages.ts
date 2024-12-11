@@ -8,6 +8,7 @@ import {
   guildMembers,
 } from "../database/schema";
 import { eq, sql, desc } from "drizzle-orm";
+import { user as UserTable } from "../database/schema/auth";
 
 export const directMessageRoutes = new Elysia()
   .derive(({ request }) => userMiddleware(request))
@@ -248,86 +249,101 @@ export const groupDmRoutes = new Elysia()
 
 export const guildChannelRoutes = new Elysia()
   .derive(({ request }) => userMiddleware(request))
-  .group("/guilds/:guildId/channels", (app) =>
-    app
-      // Send a message in a Guild Channel
-      .post(
-        "/:channelId/messages",
-        async ({ params, body, user }) => {
-          const { guildId, channelId } = params;
-          const { content } = body;
+  // Send a message in a Guild Channel
+  .post(
+    "/guilds/:guildId/channels/:channelId/messages",
+    async ({ params, body, user }) => {
+      const { guildId, channelId } = params;
+      const { content } = body as { content: string };
 
-          // Ensure the user is part of the guild
-          const guildMembership = await db
-            .select()
-            .from(guildMembers)
-            .where(
-              sql`${eq(guildMembers.guildId, guildId)} AND 
-              ${eq(guildMembers.userId, user?.id ?? "")}`
-            )
-            .limit(1);
+      // Ensure the user is part of the guild
+      const guildMembership = await db
+        .select()
+        .from(guildMembers)
+        .where(
+          sql`${eq(guildMembers.guildId, guildId)} AND 
+          ${eq(guildMembers.userId, user?.id ?? "")}`
+        )
+        .limit(1);
 
-          if (!guildMembership[0]) {
-            throw new Error("User is not a member of this guild");
-          }
+      if (!guildMembership[0]) {
+        throw new Error("User is not a member of this guild");
+      }
 
-          // Send the message
-          const message = await db
-            .insert(messages)
-            .values({
-              content,
-              authorId: user?.id ?? "",
-              channelId,
-            })
-            .returning();
+      // Send the message
+      const message = await db
+        .insert(messages)
+        .values({
+          content,
+          authorId: user?.id ?? "",
+          channelId,
+        })
+        .returning();
 
-          return message[0];
-        },
-        {
-          body: t.Object({
-            content: t.String(),
-          }),
-          params: t.Object({
-            channelId: t.String(),
-            guildId: t.String(),
-          }),
-        }
-      )
+      // Get author info
+      const author = await db
+        .select({
+          id: UserTable.id,
+          name: UserTable.name,
+          email: UserTable.email,
+          image: UserTable.image,
+        })
+        .from(UserTable)
+        .where(eq(UserTable.id, user?.id ?? ""))
+        .limit(1);
 
-      // Fetch messages in a Guild Channel
-      .get(
-        "/:channelId/messages",
-        async ({ params, user }) => {
-          const { guildId, channelId } = params;
+      return {
+        ...message[0],
+        author: author[0],
+      };
+    }
+  )
 
-          // Ensure the user is part of the guild
-          const guildMembership = await db
-            .select()
-            .from(guildMembers)
-            .where(
-              sql`${eq(guildMembers.guildId, guildId)} AND 
-              ${eq(guildMembers.userId, user?.id ?? "")}`
-            )
-            .limit(1);
+  // Fetch messages in a Guild Channel
+  .get(
+    "/guilds/:guildId/channels/:channelId/messages",
+    async ({ params, user }) => {
+      const { guildId, channelId } = params;
 
-          if (!guildMembership[0]) {
-            throw new Error("User is not a member of this guild");
-          }
+      // Ensure the user is part of the guild
+      const guildMembership = await db
+        .select()
+        .from(guildMembers)
+        .where(
+          sql`${eq(guildMembers.guildId, guildId)} AND 
+          ${eq(guildMembers.userId, user?.id ?? "")}`
+        )
+        .limit(1);
 
-          // Fetch messages in the channel
-          const messagesList = await db
-            .select()
-            .from(messages)
-            .where(eq(messages.channelId, channelId))
-            .orderBy(desc(messages.createdAt));
+      if (!guildMembership[0]) {
+        throw new Error("User is not a member of this guild");
+      }
 
-          return messagesList;
-        },
-        {
-          params: t.Object({
-            channelId: t.String(),
-            guildId: t.String(),
-          }),
-        }
-      )
+      // Fetch messages in the channel with author info
+      const messagesList = await db
+        .select({
+          message: messages,
+          author: {
+            id: UserTable.id,
+            name: UserTable.name,
+            email: UserTable.email,
+            image: UserTable.image,
+          },
+        })
+        .from(messages)
+        .leftJoin(UserTable, eq(messages.authorId, UserTable.id))
+        .where(eq(messages.channelId, channelId))
+        .orderBy(desc(messages.createdAt));
+
+      return messagesList.map(({ message, author }) => ({
+        ...message,
+        author,
+      }));
+    },
+    {
+      params: t.Object({
+        channelId: t.String(),
+        guildId: t.String(),
+      }),
+    }
   );

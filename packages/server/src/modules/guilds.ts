@@ -10,6 +10,8 @@ import {
 } from "../database/schema";
 import { guildMembers } from "../database/schema";
 import db from "../database/db";
+import { generateChannelSlug } from "../lib/generateChannelSlug";
+import { user } from "../database/schema/auth";
 
 export const guildRoutes = new Elysia()
   .derive(({ request }) => userMiddleware(request))
@@ -47,12 +49,17 @@ export const guildRoutes = new Elysia()
 
       const categoryId = category[0].id;
 
+      const defaultChannelName = "General";
+      const slug = generateChannelSlug(defaultChannelName);
+
       // Create the default "General" channel within the category
       const channel = await db
         .insert(channels)
         .values({
-          name: "General", // Default channel name
+          guildId,
+          name: defaultChannelName, // Default channel name
           categoryId,
+          slug,
         })
         .returning();
 
@@ -94,8 +101,11 @@ export const guildRoutes = new Elysia()
     const { guildId } = params;
 
     const members = await db
-      .select()
-      .from(guildMembers)
+      .select({
+        users: user,
+      })
+      .from(user)
+      .innerJoin(guildMembers, eq(guildMembers.userId, user.id))
       .where(eq(guildMembers.guildId, guildId));
 
     return members;

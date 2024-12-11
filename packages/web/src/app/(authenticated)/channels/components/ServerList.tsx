@@ -8,7 +8,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Home, Plus } from "lucide-react";
+import { Home, Plus, Bell, BellOff, LogOut } from "lucide-react";
 import React from "react";
 import Link from "next/link";
 import { Separator } from "@/components/ui/separator";
@@ -30,6 +30,12 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { CreateGuildModal } from "./CreateGuildModal";
 import { useUserStore } from "@/stores/useUserStore";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 
 export default function ServerList() {
   const currentUser = useUserStore((state) => state.currentUser);
@@ -57,6 +63,16 @@ export default function ServerList() {
     }
   };
 
+  const handleLeaveGuild = async (guildId: string) => {
+    // try {
+    //   await client.api.guilds[":guildId"].leave.delete({ params: { guildId } });
+    //   queryClient.invalidateQueries(["guilds"]);
+    //   router.push("/channels/me");
+    // } catch (error) {
+    //   console.error("Failed to leave guild:", error);
+    // }
+  };
+
   return (
     <div className="w-20 border-r flex flex-col items-center py-4 space-y-4">
       <TooltipProvider>
@@ -82,22 +98,43 @@ export default function ServerList() {
           </>
         ) : (
           guilds?.map((guild) => (
-            <Tooltip key={guild.guilds.id}>
-              <TooltipTrigger asChild>
-                <Button
-                  onClick={() => handleGuildClick(guild.guilds.id)}
-                  variant="ghost"
-                  className="w-12 h-12 rounded-[24px] p-0 overflow-hidden transition-all duration-200 hover:rounded-[16px]"
+            <ContextMenu key={guild.guilds.id}>
+              <ContextMenuTrigger>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      onClick={() => handleGuildClick(guild.guilds.id)}
+                      variant="ghost"
+                      className="w-12 h-12 rounded-[24px] p-0 overflow-hidden transition-all duration-200 hover:rounded-[16px]"
+                    >
+                      <Avatar>
+                        <AvatarFallback>{guild.guilds.name[0]}</AvatarFallback>
+                      </Avatar>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">
+                    <p>{guild.guilds.name}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </ContextMenuTrigger>
+              <ContextMenuContent>
+                <ContextMenuItem>
+                  <Bell className="mr-2 h-4 w-4" />
+                  Mute Server
+                </ContextMenuItem>
+                <ContextMenuItem>
+                  <BellOff className="mr-2 h-4 w-4" />
+                  Unmute Server
+                </ContextMenuItem>
+                <ContextMenuItem
+                  onClick={() => handleLeaveGuild(guild.guilds.id)}
+                  className="text-red-600"
                 >
-                  <Avatar>
-                    <AvatarFallback>{guild.guilds.name[0]}</AvatarFallback>
-                  </Avatar>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="right">
-                <p>{guild.guilds.name}</p>
-              </TooltipContent>
-            </Tooltip>
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Leave Server
+                </ContextMenuItem>
+              </ContextMenuContent>
+            </ContextMenu>
           ))
         )}
 
