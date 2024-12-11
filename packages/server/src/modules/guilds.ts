@@ -99,4 +99,47 @@ export const guildRoutes = new Elysia()
       .where(eq(guildMembers.guildId, guildId));
 
     return members;
+  })
+
+  // Update a guild
+  .patch(
+    "/guilds/:guildId",
+    async ({ params, body }) => {
+      const { guildId } = params;
+      const { name } = body;
+
+      const updatedGuild = await db
+        .update(guilds)
+        .set({ name })
+        .where(eq(guilds.id, guildId))
+        .returning();
+      return updatedGuild[0];
+    },
+    {
+      body: t.Object({
+        name: t.String(),
+      }),
+    }
+  )
+
+  // Delete a guild
+  .delete("/guilds/:guildId", async ({ params }) => {
+    const { guildId } = params;
+
+    await db.delete(guilds).where(eq(guilds.id, guildId));
+    return { message: "Guild deleted successfully" };
+  })
+
+  // Leave a guild
+  .delete("/guilds/:guildId/leave", async ({ params, user }) => {
+    const { guildId } = params;
+
+    await db
+      .delete(guildMembers)
+      .where(
+        eq(guildMembers.guildId, guildId) &&
+          eq(guildMembers.userId, user?.id ?? "")
+      );
+
+    return { message: "Left guild successfully" };
   });
