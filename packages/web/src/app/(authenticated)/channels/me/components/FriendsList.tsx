@@ -42,7 +42,7 @@ const FriendsList = () => {
       return data;
     },
   });
-  const { data: pendingRequests = [], isLoading: loadingRequests } = useQuery({
+  const { data: pendingRequests, isLoading: loadingRequests } = useQuery({
     queryKey: ["pendingRequests"],
     queryFn: () => {
       const data = client.api.friendships.pending.get();
@@ -96,7 +96,8 @@ const FriendsList = () => {
   });
 
   const removeFriendMutation = useMutation({
-    mutationFn: (id: string) => client.api.friendships({ id: id }).delete(),
+    mutationFn: (friendshipId: string) =>
+      client.api.friendships({ id: friendshipId }).delete(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["friends"] });
       toast({
@@ -132,8 +133,8 @@ const FriendsList = () => {
     declineFriendRequestMutation.mutate(id);
   };
 
-  const handleRemoveFriend = (id: string) => {
-    removeFriendMutation.mutate(id);
+  const handleRemoveFriend = (friendshipId: string) => {
+    removeFriendMutation.mutate(friendshipId);
   };
 
   return (
@@ -216,26 +217,45 @@ const FriendsList = () => {
                 key={request.id}
                 className="flex items-center mb-4 p-2 hover:bg-accent rounded-md"
               >
+                <Avatar className="h-10 w-10 mr-3">
+                  <AvatarFallback>{request.requester.name[0]}</AvatarFallback>
+                </Avatar>
                 <div className="flex-grow">
                   <div className="font-semibold">{request.requester.name}</div>
-                  <div className="text-sm text-muted-foreground">Pending</div>
+                  <div className="text-sm text-muted-foreground">
+                    {request.type === "incoming" ? (
+                      <span className="text-blue-500">
+                        Incoming Friend Request
+                      </span>
+                    ) : (
+                      <span className="text-green-500">
+                        Outgoing Friend Request
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <div className="flex space-x-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleAcceptFriendRequest(request.id)}
-                  >
-                    Accept
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleDeclineFriendRequest(request.id)}
-                  >
-                    Decline
-                  </Button>
-                </div>
+                {request.type === "incoming" ? (
+                  <div className="flex space-x-2">
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={() => handleAcceptFriendRequest(request.id)}
+                    >
+                      Accept
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDeclineFriendRequest(request.id)}
+                    >
+                      Decline
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="text-sm text-muted-foreground italic">
+                    Waiting for response...
+                  </div>
+                )}
               </div>
             ))
           )
@@ -286,7 +306,7 @@ const FriendsList = () => {
                 <ContextMenuSeparator />
                 <ContextMenuItem
                   className="text-red-600"
-                  onClick={() => handleRemoveFriend(friend.id)}
+                  onClick={() => handleRemoveFriend(friend.friendshipId)}
                 >
                   <Trash className="mr-2 h-4 w-4" />
                   Remove Friend

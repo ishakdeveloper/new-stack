@@ -182,11 +182,12 @@ export const friendshipRoutes = new Elysia()
       throw new Error("User not authenticated.");
     }
 
-    // Fetch pending friend requests where user is the addressee
+    // Fetch pending friend requests where user is either the requester or the addressee
     const pendingRequests = await db
       .select({
         id: friendships.id,
         requesterId: friendships.requesterId,
+        addresseeId: friendships.addresseeId,
         requesterName: UserTable.name,
         createdAt: friendships.createdAt,
         requester: {
@@ -197,15 +198,28 @@ export const friendshipRoutes = new Elysia()
         },
       })
       .from(friendships)
-      .innerJoin(UserTable, eq(friendships.requesterId, UserTable.id))
+      .innerJoin(UserTable, eq(friendships.requesterId, UserTable.id)) // Join on the requester
       .where(
         and(
-          eq(friendships.addresseeId, user.id),
-          eq(friendships.status, "pending")
+          eq(friendships.status, "pending"),
+          or(
+            eq(friendships.addresseeId, user.id), // Incoming request
+            eq(friendships.requesterId, user.id) // Outgoing request
+          )
         )
       );
 
-    return pendingRequests;
+    // Format the requests to differentiate between incoming and outgoing
+    const formattedRequests = pendingRequests.map((request) => {
+      if (request.requesterId === user.id) {
+        // Outgoing request
+        return { ...request, type: "outgoing" };
+      }
+      // Incoming request
+      return { ...request, type: "incoming" };
+    });
+
+    return formattedRequests;
   })
 
   // Get all friends of the user

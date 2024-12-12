@@ -7,6 +7,7 @@ import React, {
   useEffect,
   useCallback,
   useState,
+  useRef,
 } from "react";
 import useWebSocket, { ReadyState } from "react-use-websocket";
 
@@ -36,6 +37,7 @@ export const SocketProvider: React.FC<{
 }> = ({ children, session }) => {
   const socketUrl = "ws://localhost:4001/ws";
   const [shouldConnect, setShouldConnect] = useState(false);
+  const hasRegistered = useRef(false);
 
   const {
     sendMessage: sendRawMessage,
@@ -56,8 +58,9 @@ export const SocketProvider: React.FC<{
 
   // Register user session in elixir websocket server
   useEffect(() => {
-    if (isConnected && session) {
+    if (isConnected && session && !hasRegistered.current) {
       sendMessage({ op: "register", user: session.user });
+      hasRegistered.current = true;
     }
   }, [isConnected, session]);
 

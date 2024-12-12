@@ -81,10 +81,10 @@ export function CreateGuildModal() {
         description: `Successfully created server "${data?.guild.name}"`,
       });
 
-      socket.sendMessage({
-        op: "create_guild",
-        guild_id: data?.guild.id ?? "",
-      });
+      // socket.sendMessage({
+      //   op: "create_guild",
+      //   guild_id: data?.guild.id ?? "",
+      // });
     },
   });
 
