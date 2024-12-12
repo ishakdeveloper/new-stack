@@ -3,18 +3,28 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
 
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
-  name: text("name").notNull(),
+  name: text("name").notNull().unique(),
+  nickname: text("nickname")
+    .notNull()
+    .$defaultFn(() => {
+      // Generate random 4 digit number
+      const randomNum = Math.floor(1000 + Math.random() * 9000);
+      return `user${randomNum}`;
+    }),
   email: text("email").notNull().unique(),
   emailVerified: boolean("emailVerified").notNull(),
   image: text("image"),
   createdAt: timestamp("createdAt").notNull(),
   updatedAt: timestamp("updatedAt").notNull(),
+  bio: text("bio"),
+  banner: text("banner"),
 });
 
 export const session = pgTable("session", {

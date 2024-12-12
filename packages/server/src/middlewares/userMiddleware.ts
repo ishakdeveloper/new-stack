@@ -18,3 +18,11 @@ export const userMiddleware = async (request: Request) => {
     session: session.session,
   };
 };
+
+export const isUserAuthenticated = new Elysia()
+  .derive(({ request }) => userMiddleware(request))
+  .onBeforeHandle(({ user }) => {
+    if (!user) {
+      throw new Error("Unauthorized");
+    }
+  });
