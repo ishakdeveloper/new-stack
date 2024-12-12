@@ -193,13 +193,24 @@ const ChannelSidebar = () => {
     setIsCreateChannelOpen(true);
   };
 
-  const handleCopyInvite = () => {
+  const handleCopyInvite = async () => {
     if (inviteCode) {
-      navigator.clipboard.writeText(inviteCode);
-      toast({
-        title: "Copied!",
-        description: "Invite link copied to clipboard",
-      });
+      try {
+        await navigator.clipboard.writeText(
+          `http://localhost:3000/invite/${inviteCode}`
+        );
+        toast({
+          title: "Copied!",
+          description: "Invite link copied to clipboard",
+        });
+      } catch (err) {
+        console.error("Failed to copy text: ", err);
+        toast({
+          title: "Error",
+          description: "Failed to copy text to clipboard",
+          variant: "destructive",
+        });
+      }
     }
   };
 
@@ -304,7 +315,7 @@ const ChannelSidebar = () => {
                     </ContextMenuContent>
                   </ContextMenu>
                   {!collapsedCategories.includes(category.id) && (
-                    <div className="space-y-0.5">
+                    <div className="space-y-0.5 ml-3">
                       {category.channels.map((channel) => (
                         <ContextMenu key={channel.id}>
                           <ContextMenuTrigger>
@@ -468,21 +479,7 @@ const ChannelSidebar = () => {
                   : "Loading..."
               }
             />
-            <Button
-              size="icon"
-              onClick={() => {
-                if (inviteCode) {
-                  navigator.clipboard.writeText(
-                    `http://localhost:3000/invite/${inviteCode}`
-                  );
-                }
-
-                toast({
-                  title: "Copied!",
-                  description: "Invite link copied to clipboard",
-                });
-              }}
-            >
+            <Button size="icon" onClick={handleCopyInvite}>
               <Copy className="h-4 w-4" />
             </Button>
           </div>
