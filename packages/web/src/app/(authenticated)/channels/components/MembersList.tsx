@@ -1,15 +1,17 @@
 "use client";
 import { ScrollArea } from "@/components/ui/scroll-area";
-
 import { AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-
 import { Avatar } from "@/components/ui/avatar";
 import { useQuery } from "@tanstack/react-query";
 import { client } from "@/utils/client";
 import { useGuildStore } from "@/stores/useGuildStore";
+import UserProfilePopup from "./UserProfilePopup";
+import { useState } from "react";
 
 const MembersList = () => {
   const currentGuildId = useGuildStore((state) => state.currentGuildId);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+
   const { data: guildMembers } = useQuery({
     queryKey: ["guildMembers", currentGuildId],
     queryFn: () => {
@@ -18,10 +20,10 @@ const MembersList = () => {
         .members.get();
       return data;
     },
-    enabled: !!currentGuildId, // Ensures the query runs only if currentGuildId exists
-    refetchOnWindowFocus: false, // Disable refetch on window focus
-    refetchOnReconnect: false, // Disable refetch on reconnect
-    refetchInterval: false, // Disable automatic refetching at intervals
+    enabled: !!currentGuildId,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchInterval: false,
   });
 
   return (
@@ -31,7 +33,11 @@ const MembersList = () => {
       </div>
       <ScrollArea className="h-full">
         {guildMembers?.data?.map((member) => (
-          <div key={member.users.id} className="flex items-center mb-2">
+          <div
+            key={member.users.id}
+            className="flex items-center mb-2 p-2 rounded hover:bg-accent cursor-pointer"
+            onClick={() => setSelectedUserId(member.users.id)}
+          >
             <Avatar className="h-8 w-8 mr-2">
               <AvatarImage src={member.users.image ?? ""} />
               <AvatarFallback>{member.users.name[0]}</AvatarFallback>
@@ -40,6 +46,12 @@ const MembersList = () => {
           </div>
         ))}
       </ScrollArea>
+      {selectedUserId && (
+        <UserProfilePopup
+          userId={selectedUserId}
+          onClose={() => setSelectedUserId(null)}
+        />
+      )}
     </div>
   );
 };

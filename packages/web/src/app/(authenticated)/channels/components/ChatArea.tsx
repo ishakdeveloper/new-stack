@@ -144,7 +144,7 @@ const ChatArea = () => {
       <div className="p-4 border-t">
         <form onSubmit={handleSendMessage}>
           <Input
-            placeholder="Message #general"
+            placeholder={`Message #${channel?.data?.slug}`}
             value={message}
             onChange={(e) => setMessage(e.target.value)}
           />

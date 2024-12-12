@@ -1,8 +1,8 @@
 CREATE TABLE IF NOT EXISTS "account" (
-	"id" text PRIMARY KEY NOT NULL,
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"accountId" text NOT NULL,
 	"providerId" text NOT NULL,
-	"userId" text NOT NULL,
+	"userId" uuid NOT NULL,
 	"accessToken" text,
 	"refreshToken" text,
 	"idToken" text,
@@ -15,30 +15,34 @@ CREATE TABLE IF NOT EXISTS "account" (
 );
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "session" (
-	"id" text PRIMARY KEY NOT NULL,
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"expiresAt" timestamp NOT NULL,
 	"token" text NOT NULL,
 	"createdAt" timestamp NOT NULL,
 	"updatedAt" timestamp NOT NULL,
 	"ipAddress" text,
 	"userAgent" text,
-	"userId" text NOT NULL,
+	"userId" uuid NOT NULL,
 	CONSTRAINT "session_token_unique" UNIQUE("token")
 );
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "user" (
-	"id" text PRIMARY KEY NOT NULL,
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"name" text NOT NULL,
+	"nickname" text NOT NULL,
 	"email" text NOT NULL,
 	"emailVerified" boolean NOT NULL,
 	"image" text,
 	"createdAt" timestamp NOT NULL,
 	"updatedAt" timestamp NOT NULL,
+	"bio" text,
+	"banner" text,
+	CONSTRAINT "user_name_unique" UNIQUE("name"),
 	CONSTRAINT "user_email_unique" UNIQUE("email")
 );
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "verification" (
-	"id" text PRIMARY KEY NOT NULL,
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"identifier" text NOT NULL,
 	"value" text NOT NULL,
 	"expiresAt" timestamp NOT NULL,
@@ -50,6 +54,8 @@ CREATE TABLE IF NOT EXISTS "categories" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"name" text NOT NULL,
 	"guildId" uuid NOT NULL,
+	"position" integer DEFAULT 0 NOT NULL,
+	"isPrivate" boolean DEFAULT false NOT NULL,
 	"createdAt" timestamp DEFAULT now() NOT NULL,
 	"updatedAt" timestamp DEFAULT now() NOT NULL
 );
@@ -57,7 +63,11 @@ CREATE TABLE IF NOT EXISTS "categories" (
 CREATE TABLE IF NOT EXISTS "channels" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"name" text NOT NULL,
-	"categoryId" uuid NOT NULL,
+	"slug" text NOT NULL,
+	"categoryId" uuid,
+	"guildId" uuid NOT NULL,
+	"position" integer DEFAULT 0 NOT NULL,
+	"isPrivate" boolean DEFAULT false NOT NULL,
 	"createdAt" timestamp DEFAULT now() NOT NULL,
 	"updatedAt" timestamp DEFAULT now() NOT NULL
 );
@@ -65,7 +75,7 @@ CREATE TABLE IF NOT EXISTS "channels" (
 CREATE TABLE IF NOT EXISTS "dm_channel_users" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"channelId" uuid NOT NULL,
-	"userId" text NOT NULL,
+	"userId" uuid NOT NULL,
 	"joinedAt" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
@@ -73,14 +83,14 @@ CREATE TABLE IF NOT EXISTS "dm_channels" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"name" text,
 	"isGroup" boolean DEFAULT false NOT NULL,
-	"createdBy" text NOT NULL,
+	"createdBy" uuid NOT NULL,
 	"createdAt" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "friendships" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"requesterId" text NOT NULL,
-	"addresseeId" text NOT NULL,
+	"requesterId" uuid NOT NULL,
+	"addresseeId" uuid NOT NULL,
 	"status" varchar(20) DEFAULT 'pending' NOT NULL,
 	"createdAt" timestamp DEFAULT now() NOT NULL,
 	"updatedAt" timestamp DEFAULT now() NOT NULL
@@ -89,7 +99,7 @@ CREATE TABLE IF NOT EXISTS "friendships" (
 CREATE TABLE IF NOT EXISTS "guild_invite_links" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"guildId" uuid NOT NULL,
-	"inviterId" text NOT NULL,
+	"inviterId" uuid NOT NULL,
 	"inviteCode" varchar(8) NOT NULL,
 	"maxUses" integer,
 	"uses" integer DEFAULT 0,
@@ -102,7 +112,7 @@ CREATE TABLE IF NOT EXISTS "guild_invite_links" (
 CREATE TABLE IF NOT EXISTS "guild_members" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"guildId" uuid NOT NULL,
-	"userId" text NOT NULL,
+	"userId" uuid NOT NULL,
 	"roleIds" text[],
 	"joinedAt" timestamp DEFAULT now() NOT NULL
 );
@@ -111,7 +121,7 @@ CREATE TABLE IF NOT EXISTS "guilds" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"name" text NOT NULL,
 	"iconUrl" text,
-	"ownerId" text NOT NULL,
+	"ownerId" uuid NOT NULL,
 	"createdAt" timestamp DEFAULT now() NOT NULL,
 	"updatedAt" timestamp DEFAULT now() NOT NULL
 );
@@ -119,7 +129,7 @@ CREATE TABLE IF NOT EXISTS "guilds" (
 CREATE TABLE IF NOT EXISTS "invite_link_usages" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"inviteLinkId" uuid NOT NULL,
-	"invitedUserId" text NOT NULL,
+	"invitedUserId" uuid NOT NULL,
 	"usedAt" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
@@ -127,7 +137,7 @@ CREATE TABLE IF NOT EXISTS "messages" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"channelId" uuid,
 	"dmChannelId" uuid,
-	"authorId" text NOT NULL,
+	"authorId" uuid NOT NULL,
 	"content" text,
 	"attachments" text[],
 	"createdAt" timestamp DEFAULT now() NOT NULL,
@@ -156,19 +166,25 @@ EXCEPTION
 END $$;
 --> statement-breakpoint
 DO $$ BEGIN
- ALTER TABLE "categories" ADD CONSTRAINT "categories_guildId_guilds_id_fk" FOREIGN KEY ("guildId") REFERENCES "public"."guilds"("id") ON DELETE no action ON UPDATE no action;
+ ALTER TABLE "categories" ADD CONSTRAINT "categories_guildId_guilds_id_fk" FOREIGN KEY ("guildId") REFERENCES "public"."guilds"("id") ON DELETE cascade ON UPDATE no action;
 EXCEPTION
  WHEN duplicate_object THEN null;
 END $$;
 --> statement-breakpoint
 DO $$ BEGIN
- ALTER TABLE "channels" ADD CONSTRAINT "channels_categoryId_categories_id_fk" FOREIGN KEY ("categoryId") REFERENCES "public"."categories"("id") ON DELETE no action ON UPDATE no action;
+ ALTER TABLE "channels" ADD CONSTRAINT "channels_categoryId_categories_id_fk" FOREIGN KEY ("categoryId") REFERENCES "public"."categories"("id") ON DELETE cascade ON UPDATE no action;
 EXCEPTION
  WHEN duplicate_object THEN null;
 END $$;
 --> statement-breakpoint
 DO $$ BEGIN
- ALTER TABLE "dm_channel_users" ADD CONSTRAINT "dm_channel_users_channelId_dm_channels_id_fk" FOREIGN KEY ("channelId") REFERENCES "public"."dm_channels"("id") ON DELETE no action ON UPDATE no action;
+ ALTER TABLE "channels" ADD CONSTRAINT "channels_guildId_guilds_id_fk" FOREIGN KEY ("guildId") REFERENCES "public"."guilds"("id") ON DELETE cascade ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "dm_channel_users" ADD CONSTRAINT "dm_channel_users_channelId_dm_channels_id_fk" FOREIGN KEY ("channelId") REFERENCES "public"."dm_channels"("id") ON DELETE cascade ON UPDATE no action;
 EXCEPTION
  WHEN duplicate_object THEN null;
 END $$;
@@ -198,7 +214,7 @@ EXCEPTION
 END $$;
 --> statement-breakpoint
 DO $$ BEGIN
- ALTER TABLE "guild_invite_links" ADD CONSTRAINT "guild_invite_links_guildId_guilds_id_fk" FOREIGN KEY ("guildId") REFERENCES "public"."guilds"("id") ON DELETE no action ON UPDATE no action;
+ ALTER TABLE "guild_invite_links" ADD CONSTRAINT "guild_invite_links_guildId_guilds_id_fk" FOREIGN KEY ("guildId") REFERENCES "public"."guilds"("id") ON DELETE cascade ON UPDATE no action;
 EXCEPTION
  WHEN duplicate_object THEN null;
 END $$;
@@ -210,7 +226,7 @@ EXCEPTION
 END $$;
 --> statement-breakpoint
 DO $$ BEGIN
- ALTER TABLE "guild_members" ADD CONSTRAINT "guild_members_guildId_guilds_id_fk" FOREIGN KEY ("guildId") REFERENCES "public"."guilds"("id") ON DELETE no action ON UPDATE no action;
+ ALTER TABLE "guild_members" ADD CONSTRAINT "guild_members_guildId_guilds_id_fk" FOREIGN KEY ("guildId") REFERENCES "public"."guilds"("id") ON DELETE cascade ON UPDATE no action;
 EXCEPTION
  WHEN duplicate_object THEN null;
 END $$;
@@ -228,7 +244,7 @@ EXCEPTION
 END $$;
 --> statement-breakpoint
 DO $$ BEGIN
- ALTER TABLE "invite_link_usages" ADD CONSTRAINT "invite_link_usages_inviteLinkId_guild_invite_links_id_fk" FOREIGN KEY ("inviteLinkId") REFERENCES "public"."guild_invite_links"("id") ON DELETE no action ON UPDATE no action;
+ ALTER TABLE "invite_link_usages" ADD CONSTRAINT "invite_link_usages_inviteLinkId_guild_invite_links_id_fk" FOREIGN KEY ("inviteLinkId") REFERENCES "public"."guild_invite_links"("id") ON DELETE cascade ON UPDATE no action;
 EXCEPTION
  WHEN duplicate_object THEN null;
 END $$;
@@ -240,13 +256,13 @@ EXCEPTION
 END $$;
 --> statement-breakpoint
 DO $$ BEGIN
- ALTER TABLE "messages" ADD CONSTRAINT "messages_channelId_channels_id_fk" FOREIGN KEY ("channelId") REFERENCES "public"."channels"("id") ON DELETE no action ON UPDATE no action;
+ ALTER TABLE "messages" ADD CONSTRAINT "messages_channelId_channels_id_fk" FOREIGN KEY ("channelId") REFERENCES "public"."channels"("id") ON DELETE cascade ON UPDATE no action;
 EXCEPTION
  WHEN duplicate_object THEN null;
 END $$;
 --> statement-breakpoint
 DO $$ BEGIN
- ALTER TABLE "messages" ADD CONSTRAINT "messages_dmChannelId_dm_channels_id_fk" FOREIGN KEY ("dmChannelId") REFERENCES "public"."dm_channels"("id") ON DELETE no action ON UPDATE no action;
+ ALTER TABLE "messages" ADD CONSTRAINT "messages_dmChannelId_dm_channels_id_fk" FOREIGN KEY ("dmChannelId") REFERENCES "public"."dm_channels"("id") ON DELETE cascade ON UPDATE no action;
 EXCEPTION
  WHEN duplicate_object THEN null;
 END $$;
@@ -258,7 +274,7 @@ EXCEPTION
 END $$;
 --> statement-breakpoint
 DO $$ BEGIN
- ALTER TABLE "roles" ADD CONSTRAINT "roles_guildId_guilds_id_fk" FOREIGN KEY ("guildId") REFERENCES "public"."guilds"("id") ON DELETE no action ON UPDATE no action;
+ ALTER TABLE "roles" ADD CONSTRAINT "roles_guildId_guilds_id_fk" FOREIGN KEY ("guildId") REFERENCES "public"."guilds"("id") ON DELETE cascade ON UPDATE no action;
 EXCEPTION
  WHEN duplicate_object THEN null;
 END $$;

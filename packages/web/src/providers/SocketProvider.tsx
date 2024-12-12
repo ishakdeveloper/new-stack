@@ -14,6 +14,7 @@ import useWebSocket, { ReadyState } from "react-use-websocket";
 type WebSocketMessage =
   | { op: "register"; user: any }
   | { op: "join_guild"; guild_id: string }
+  | { op: "enter_guild"; guild_id: string }
   | { op: "leave_guild"; guild_id: string }
   | { op: "create_room"; room_id: string }
   | { op: "join_room"; room_id: string }
@@ -41,13 +42,14 @@ export const SocketProvider: React.FC<{
     lastMessage,
     readyState,
   } = useWebSocket(socketUrl, {
-    shouldReconnect: () => true, // Automatically attempt reconnections
-    reconnectAttempts: 10, // Limit reconnection attempts
-    reconnectInterval: 3000, // Reconnect every 3 seconds
+    shouldReconnect: () => true,
+    reconnectAttempts: 10,
+    reconnectInterval: 0, // Set to 0 for immediate reconnection
+    retryOnError: true,
     onOpen: () => console.log("WebSocket connection opened"),
     onClose: () => console.log("WebSocket connection closed"),
     onError: (event) => console.error("WebSocket error:", event),
-    share: true, // Share the WebSocket connection across components
+    share: true,
   });
 
   const isConnected = readyState === ReadyState.OPEN;

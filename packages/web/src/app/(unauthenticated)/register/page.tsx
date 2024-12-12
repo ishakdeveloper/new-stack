@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Icons } from "@/components/ui/icons";
 import { authClient } from "@/utils/authClient";
 import { useUserStore } from "@/stores/useUserStore";
+import { useSocket } from "@/providers/SocketProvider";
 type FormData = {
   name: string;
   email: string;
@@ -24,6 +25,7 @@ type FormData = {
 };
 
 export default function RegisterPage() {
+  const socket = useSocket();
   const setCurrentUser = useUserStore((state) => state.setCurrentUser);
   const router = useRouter();
   const {
@@ -39,21 +41,27 @@ export default function RegisterPage() {
     // Add your registration logic here
     await new Promise((resolve) => setTimeout(resolve, 3000));
 
-    await authClient.signUp
-      .email({
-        name: data.name,
-        email: data.email,
-        password: data.password,
-        callbackURL: "/channels/me",
-      })
-      .then((user) => {
-        setCurrentUser({
-          id: user.data?.user.id ?? "",
-          email: user.data?.user.email ?? "",
-          name: user.data?.user.name ?? "",
-          image: user.data?.user.image ?? "",
-        });
-      });
+    await authClient.signUp.email({
+      name: data.name,
+      email: data.email,
+      password: data.password,
+      callbackURL: "/channels/me",
+      fetchOptions: {
+        onSuccess: (user) => {
+          setCurrentUser({
+            id: user.data.id ?? "",
+            email: user.data.email ?? "",
+            name: user.data.name ?? "",
+            image: user.data.image ?? "",
+          });
+
+          socket.sendMessage({
+            op: "register",
+            user: user.data,
+          });
+        },
+      },
+    });
 
     router.push("/channels/me");
   };

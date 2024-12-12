@@ -18,7 +18,7 @@ export const guilds = pgTable("guilds", {
   id: uuid("id").defaultRandom().primaryKey(), // Unique Guild ID
   name: text("name").notNull(), // Guild name
   iconUrl: text("iconUrl"), // Optional Guild icon
-  ownerId: text("ownerId")
+  ownerId: uuid("ownerId")
     .notNull()
     .references(() => user.id), // Guild owner
   createdAt: timestamp("createdAt").notNull().defaultNow(),
@@ -38,7 +38,7 @@ export const guildMembers = pgTable("guild_members", {
   guildId: uuid("guildId")
     .notNull()
     .references(() => guilds.id, { onDelete: "cascade" }), // Reference to Guild
-  userId: text("userId")
+  userId: uuid("userId")
     .notNull()
     .references(() => user.id), // Reference to User
   roleIds: text("roleIds").array(), // Array of Role IDs assigned to the member
@@ -101,7 +101,7 @@ export const dmChannels = pgTable("dm_channels", {
   id: uuid("id").defaultRandom().primaryKey(),
   name: text("name"), // Optional for group DMs
   isGroup: boolean("isGroup").notNull().default(false), // True for group DMs
-  createdBy: text("createdBy")
+  createdBy: uuid("createdBy")
     .notNull()
     .references(() => user.id), // Creator of the DM or group DM
   createdAt: timestamp("createdAt").notNull().defaultNow(),
@@ -119,7 +119,7 @@ export const dmChannelUsers = pgTable("dm_channel_users", {
   channelId: uuid("channelId")
     .notNull()
     .references(() => dmChannels.id, { onDelete: "cascade" }), // DM/Group DM this user is part of
-  userId: text("userId")
+  userId: uuid("userId")
     .notNull()
     .references(() => user.id), // User in the DM or group
   joinedAt: timestamp("joinedAt").notNull().defaultNow(),
@@ -148,10 +148,10 @@ export const RoleCreateSchema = t.Omit(RoleSchema, ["id", "createdAt"]);
 // Friendships Table
 export const friendships = pgTable("friendships", {
   id: uuid("id").defaultRandom().primaryKey(),
-  requesterId: text("requesterId")
+  requesterId: uuid("requesterId")
     .notNull()
     .references(() => user.id), // User who sent the friend request
-  addresseeId: text("addresseeId")
+  addresseeId: uuid("addresseeId")
     .notNull()
     .references(() => user.id), // User who received the friend request
   status: varchar("status", { length: 20 }).notNull().default("pending"), // "pending", "accepted", "declined"
@@ -176,7 +176,7 @@ export const messages = pgTable("messages", {
   dmChannelId: uuid("dmChannelId").references(() => dmChannels.id, {
     onDelete: "cascade",
   }), // Reference for DM messages
-  authorId: text("authorId")
+  authorId: uuid("authorId")
     .notNull()
     .references(() => user.id), // User who sent the message
   content: text("content"), // Message text
@@ -197,7 +197,7 @@ export const guildInviteLinks = pgTable("guild_invite_links", {
   guildId: uuid("guildId")
     .notNull()
     .references(() => guilds.id, { onDelete: "cascade" }),
-  inviterId: text("inviterId")
+  inviterId: uuid("inviterId")
     .notNull()
     .references(() => user.id), // User who created the invite
   inviteCode: varchar("inviteCode", { length: 8 }).notNull().unique(), // Unique code
@@ -221,7 +221,7 @@ export const inviteLinkUsages = pgTable("invite_link_usages", {
   inviteLinkId: uuid("inviteLinkId")
     .notNull()
     .references(() => guildInviteLinks.id, { onDelete: "cascade" }), // Reference to the invite link
-  invitedUserId: text("invitedUserId")
+  invitedUserId: uuid("invitedUserId")
     .notNull()
     .references(() => user.id), // User who used the invite link
   usedAt: timestamp("usedAt").notNull().defaultNow(), // Time of usage

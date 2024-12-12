@@ -3,6 +3,7 @@
 import React, { useEffect } from "react";
 import { useGuildStore } from "@/stores/useGuildStore";
 import ChatArea from "../../components/ChatArea";
+import { useSocket } from "@/providers/SocketProvider";
 
 export default function ChannelPage({
   params,
@@ -10,6 +11,8 @@ export default function ChannelPage({
   params: Promise<{ channelId: string }>;
 }) {
   const { setCurrentChannelId, currentChannelId } = useGuildStore();
+  const getCurrentGuildId = useGuildStore((state) => state.currentGuildId);
+  const socket = useSocket();
 
   useEffect(() => {
     async function fetchParams() {
@@ -19,6 +22,15 @@ export default function ChannelPage({
 
     fetchParams();
   }, [params, setCurrentChannelId]);
+
+  useEffect(() => {
+    if (socket) {
+      socket.sendMessage({
+        op: "enter_guild",
+        guild_id: getCurrentGuildId ?? "",
+      });
+    }
+  }, [getCurrentGuildId]);
 
   return (
     <>

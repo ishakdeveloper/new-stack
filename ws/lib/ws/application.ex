@@ -11,7 +11,9 @@ defmodule Ws.Application do
       {Registry, keys: :unique, name: WS.SocketRegistry},
       WS.PubSub,
       {WS.SessionSupervisor, []},
+      {WS.GuildSupervisor, []},
       WS.Room,
+      WS.Guild,
       {Plug.Cowboy, scheme: :http, plug: Ws, options: [port: 4001, dispatch: dispatch()]}
     ]
 

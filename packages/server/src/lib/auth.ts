@@ -3,6 +3,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import db from "../database/db";
 import * as authSchema from "../database/schema/auth";
 import { openAPI } from "better-auth/plugins";
+import { v4 as uuidv4 } from "uuid";
 
 export const auth = betterAuth({
   baseUrl: "http://localhost:4000/",
@@ -12,6 +13,11 @@ export const auth = betterAuth({
     provider: "pg",
     schema: authSchema,
   }),
+  advanced: {
+    generateId: () => {
+      return uuidv4();
+    },
+  },
   emailAndPassword: {
     enabled: true,
     autoSignIn: true,

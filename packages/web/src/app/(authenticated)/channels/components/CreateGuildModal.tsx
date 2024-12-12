@@ -28,6 +28,7 @@ import { useState } from "react";
 import { Icons } from "@/components/ui/icons";
 import { useGuildStore } from "@/stores/useGuildStore";
 import { useToast } from "@/hooks/use-toast";
+import { useSocket } from "@/providers/SocketProvider";
 
 const createGuildSchema = z.object({
   name: z.string().min(1, "Name is required").max(100),
@@ -56,6 +57,8 @@ export function CreateGuildModal() {
     (state) => state.setLastVisitedChannel
   );
 
+  const socket = useSocket();
+
   const createGuildMutation = useMutation({
     mutationFn: async (data: CreateGuildForm) => {
       const response = await client.api.guilds.post({
@@ -76,6 +79,11 @@ export function CreateGuildModal() {
       toast({
         title: "Server Created",
         description: `Successfully created server "${data?.guild.name}"`,
+      });
+
+      socket.sendMessage({
+        op: "create_guild",
+        guild_id: data?.guild.id ?? "",
       });
     },
   });

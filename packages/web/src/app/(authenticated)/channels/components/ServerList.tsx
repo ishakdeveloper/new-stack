@@ -9,7 +9,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Home, Plus, Bell, BellOff, LogOut } from "lucide-react";
-import React from "react";
+import React, { useEffect } from "react";
 import Link from "next/link";
 import { Separator } from "@/components/ui/separator";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -36,11 +36,13 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import { useSocket } from "@/providers/SocketProvider";
 
 export default function ServerList() {
   const currentUser = useUserStore((state) => state.currentUser);
   const queryClient = useQueryClient();
   const setCurrentGuildId = useGuildStore((state) => state.setCurrentGuildId);
+  const currentGuildId = useGuildStore((state) => state.currentGuildId);
   const lastVisitedChannels = useGuildStore(
     (state) => state.lastVisitedChannels
   );
@@ -52,6 +54,8 @@ export default function ServerList() {
       return res.data;
     },
   });
+
+  const socket = useSocket();
 
   const leaveGuild = useMutation({
     mutationKey: ["leaveGuild", currentUser?.id],
@@ -81,7 +85,25 @@ export default function ServerList() {
     },
   });
 
-  const handleGuildClick = (guildId: string) => {
+  const handleGuildClick = async (guildId: string) => {
+    if (socket && socket.isConnected) {
+      // First leave current guild if we're in one
+      if (currentGuildId) {
+        socket.sendMessage({
+          op: "leave_guild",
+          guild_id: currentGuildId,
+        });
+      }
+
+      // Then join the new guild
+      socket.sendMessage({
+        op: "enter_guild",
+        guild_id: guildId,
+      });
+    } else {
+      console.error("Socket is not connected");
+    }
+
     setCurrentGuildId(guildId);
 
     if (lastVisitedChannels[guildId]) {

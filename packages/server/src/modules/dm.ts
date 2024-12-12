@@ -48,10 +48,22 @@ export const dmRoutes = new Elysia()
   // Fetch all DMs for the logged-in user
   .get("/dms", async ({ user }) => {
     const channels = await db
-      .select()
+      .select({
+        id: dmChannels.id,
+        name: dmChannels.name,
+        isGroup: dmChannels.isGroup,
+        createdAt: dmChannels.createdAt,
+        createdBy: dmChannels.createdBy,
+        users: dmChannelUsers.userId,
+      })
       .from(dmChannels)
       .leftJoin(dmChannelUsers, eq(dmChannelUsers.channelId, dmChannels.id))
-      .where(eq(dmChannelUsers.userId, user?.id ?? ""));
+      .where(
+        and(
+          eq(dmChannelUsers.userId, user?.id ?? ""),
+          not(eq(dmChannelUsers.userId, user?.id ?? ""))
+        )
+      );
 
     return channels;
   })
