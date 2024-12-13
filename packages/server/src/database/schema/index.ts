@@ -7,6 +7,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
@@ -125,16 +126,26 @@ export const DMChannelCreateSchema = t.Omit(DMChannelSchema, [
 export type DMChannelCreate = Static<typeof DMChannelCreateSchema>;
 
 // DM Channel Users Table (Many-to-Many)
-export const dmChannelUsers = pgTable("dm_channel_users", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  channelId: uuid("channelId")
-    .notNull()
-    .references(() => dmChannels.id, { onDelete: "cascade" }), // DM/Group DM this user is part of
-  userId: uuid("userId")
-    .notNull()
-    .references(() => user.id), // User in the DM or group
-  joinedAt: timestamp("joinedAt").notNull().defaultNow(),
-});
+export const dmChannelUsers = pgTable(
+  "dm_channel_users",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    channelId: uuid("channelId")
+      .notNull()
+      .references(() => dmChannels.id, { onDelete: "cascade" }), // DM/Group DM this user is part of
+    userId: uuid("userId")
+      .notNull()
+      .references(() => user.id), // User in the DM or group
+    joinedAt: timestamp("joinedAt").notNull().defaultNow(),
+  },
+  (table) => {
+    return {
+      uniqueUsersInChannel: uniqueIndex("unique_users_in_channel").on(
+        sql`LEAST(${table.channelId}, ${table.userId}), GREATEST(${table.channelId}, ${table.userId})`
+      ),
+    };
+  }
+);
 
 export const DMChannelUserSchema = createSelectSchema(dmChannelUsers);
 export type DMChannelUser = Static<typeof DMChannelUserSchema>;

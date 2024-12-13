@@ -2,8 +2,8 @@ import Elysia, { t } from "elysia";
 import { userMiddleware } from "../middlewares/userMiddleware";
 import db from "../database/db";
 import { dmChannels, dmChannelUsers, messages } from "../database/schema";
-import { and, eq, not } from "drizzle-orm";
-import { user, user as UserTable } from "../database/schema/auth";
+import { and, eq, not, sql } from "drizzle-orm";
+import { user as UserTable } from "../database/schema/auth";
 
 export const dmRoutes = new Elysia()
   .derive(({ request }) => userMiddleware(request))
@@ -47,23 +47,28 @@ export const dmRoutes = new Elysia()
 
   // Fetch all DMs for the logged-in user
   .get("/dms", async ({ user }) => {
+    const userId = user?.id;
+
+    if (!userId) {
+      throw new Error("User not authenticated.");
+    }
+
+    // Fetch DM channels with user-specific names
     const channels = await db
       .select({
         id: dmChannels.id,
-        name: dmChannels.name,
         isGroup: dmChannels.isGroup,
         createdAt: dmChannels.createdAt,
         createdBy: dmChannels.createdBy,
-        users: dmChannelUsers.userId,
+        name: sql`CASE 
+            WHEN dm_channel_users."userId" != ${userId} THEN "user".name
+            ELSE NULL
+          END`.as<string | null>("name"), // Explicitly type the "name" as string or null
       })
       .from(dmChannels)
-      .leftJoin(dmChannelUsers, eq(dmChannelUsers.channelId, dmChannels.id))
-      .where(
-        and(
-          eq(dmChannelUsers.userId, user?.id ?? ""),
-          not(eq(dmChannelUsers.userId, user?.id ?? ""))
-        )
-      );
+      .innerJoin(dmChannelUsers, eq(dmChannelUsers.channelId, dmChannels.id))
+      .innerJoin(UserTable, eq(dmChannelUsers.userId, UserTable.id)) // Use "user" directly since you imported it as "user"
+      .where(eq(dmChannelUsers.userId, userId));
 
     return channels;
   })

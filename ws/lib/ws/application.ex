@@ -10,6 +10,8 @@ defmodule Ws.Application do
     children = [
       WS.PubSub,
       WS.UserSessionSupervisor,
+      WS.ChatSupervisor,
+      WS.GuildSessionSupervisor,
       {Plug.Cowboy, scheme: :http, plug: Ws, options: [port: 4001, dispatch: dispatch()]}
     ]
 

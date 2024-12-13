@@ -79,20 +79,23 @@ export const friendshipRoutes = new Elysia()
         id: friendships.id,
         requesterId: friendships.requesterId,
         addresseeId: friendships.addresseeId,
-        requester: {
-          id: UserTable.id,
-          name: UserTable.name,
-        },
       })
       .from(friendships)
-      .innerJoin(UserTable, eq(friendships.requesterId, UserTable.id))
       .where(eq(friendships.id, id));
 
     if (!existingRequest.length) {
       throw new Error("Friend request not found.");
     }
 
-    // Assuming the request was found and accepted
+    const { addresseeId } = existingRequest[0];
+    const loggedInUserId = user?.id ?? "";
+
+    // Ensure the logged-in user is the addressee
+    if (loggedInUserId !== addresseeId) {
+      throw new Error("You are not authorized to accept this request.");
+    }
+
+    // Accept the friend request
     const updatedRequest = await db
       .update(friendships)
       .set({
@@ -101,54 +104,10 @@ export const friendshipRoutes = new Elysia()
       .where(eq(friendships.id, id))
       .returning();
 
-    // Create two DM channels - one for each user's perspective
-    try {
-      const [dmChannel1, dmChannel2] = await Promise.all([
-        db
-          .insert(dmChannels)
-          .values({
-            isGroup: false,
-            name: existingRequest[0].requester.name,
-            createdBy: user?.id ?? "",
-          })
-          .returning(),
-        db
-          .insert(dmChannels)
-          .values({
-            isGroup: false,
-            name: user?.name ?? "",
-            createdBy: existingRequest[0].requesterId,
-          })
-          .returning(),
-      ]);
-
-      // Add both users to both DM channels
-      await db.insert(dmChannelUsers).values([
-        {
-          channelId: dmChannel1[0].id,
-          userId: user?.id ?? "",
-        },
-        {
-          channelId: dmChannel1[0].id,
-          userId: existingRequest[0].requesterId,
-        },
-        {
-          channelId: dmChannel2[0].id,
-          userId: user?.id ?? "",
-        },
-        {
-          channelId: dmChannel2[0].id,
-          userId: existingRequest[0].requesterId,
-        },
-      ]);
-
-      return {
-        friendship: updatedRequest[0],
-        dmChannel: dmChannel1[0],
-      };
-    } catch (error) {
-      throw new Error("Failed to create DM channels or add users.");
-    }
+    return {
+      message: "Friendship accepted.",
+      friendship: updatedRequest[0],
+    };
   })
 
   // Decline a friend request

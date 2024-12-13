@@ -157,6 +157,58 @@ defmodule WS.SocketHandler do
             remote_send_impl(response, state)
         end
 
+      {:ok, %{"op" => "join_guild", "guild_id" => guild_id}} ->
+        Logger.debug("Processing join_guild operation")
+        case state.user do
+          nil ->
+            Logger.warn("Join guild attempt without registration")
+            response = %{"status" => "error", "message" => "You must register first"}
+            remote_send_impl(response, state)
+          %WS.User{id: user_id} ->
+            WS.Guild.join_guild(guild_id, user_id)
+            response = %{"status" => "success", "message" => "Joined guild"}
+            remote_send_impl(response, state)
+        end
+
+      {:ok, %{"op" => "leave_guild", "guild_id" => guild_id}} ->
+        Logger.debug("Processing leave_guild operation")
+        case state.user do
+          nil ->
+            Logger.warn("Leave guild attempt without registration")
+            response = %{"status" => "error", "message" => "You must register first"}
+            remote_send_impl(response, state)
+          %WS.User{id: user_id} ->
+            WS.Guild.leave_guild(guild_id, user_id)
+            response = %{"status" => "success", "message" => "Left guild"}
+            remote_send_impl(response, state)
+        end
+
+      {:ok, %{"op" => "destroy_guild", "guild_id" => guild_id}} ->
+        Logger.debug("Processing destroy_guild operation")
+        case state.user do
+          nil ->
+            Logger.warn("Destroy guild attempt without registration")
+            response = %{"status" => "error", "message" => "You must register first"}
+            remote_send_impl(response, state)
+          %WS.User{id: user_id} ->
+            WS.Guild.destroy(guild_id, user_id)
+            response = %{"status" => "success", "message" => "Guild destroyed"}
+            remote_send_impl(response, state)
+        end
+
+      {:ok, %{"op" => "chat_message", "guild_id" => guild_id, "content" => content}} ->
+        Logger.debug("Processing chat_message operation")
+        case state.user do
+          nil ->
+            Logger.warn("Chat message attempt without registration")
+            response = %{"status" => "error", "message" => "You must register first"}
+            remote_send_impl(response, state)
+          %WS.User{id: user_id} ->
+            WS.Chat.send_message(guild_id, [user_id, content])
+            response = %{"status" => "success", "message" => "Message sent"}
+            remote_send_impl(response, state)
+        end
+
       # Default case for unknown operations
       {:ok, %{"op" => op}} ->
         Logger.warn("Unknown operation received: #{op}, state: #{inspect(state)}")

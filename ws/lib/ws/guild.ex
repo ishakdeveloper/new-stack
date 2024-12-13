@@ -5,198 +5,151 @@ defmodule WS.Guild do
 
   alias WS.PubSub
 
-  defstruct guild_id: nil,
-            user_ids: [],
-            rooms: []
+  defmodule State do
+    @type t :: %__MODULE__{
+      guild_id: String.t(),
+      user_ids: [String.t()],
+    }
 
-  @type t :: %__MODULE__{
-          guild_id: String.t(),
-          user_ids: [String.t()],
-          rooms: [String.t()]
-        }
+    defstruct guild_id: nil,
+              user_ids: []
 
-  def start_link(guild_id) do
-    Logger.debug("Starting guild process for guild_id: #{guild_id}")
-    GenServer.start_link(__MODULE__, %__MODULE__{guild_id: guild_id, user_ids: [], rooms: []}, name: via_tuple(guild_id))
   end
 
-  def via_tuple(guild_id), do: {:via, Registry, {WS.SocketRegistry, "guild:#{guild_id}"}}
+  defp via_tuple(user_id), do: {:via, Registry, {WS.GuildSessionRegistry, user_id}}
 
-  def add_user(guild_id, user_id) do
-    Logger.debug("Adding user #{user_id} to guild #{guild_id}")
-    GenServer.call(via_tuple(guild_id), {:add_user, user_id})
-  end
+  defp cast(user_id, params), do: GenServer.cast(via_tuple(user_id), params)
+  defp call(user_id, params), do: GenServer.call(via_tuple(user_id), params)
 
-  def remove_user(guild_id, user_id) do
-    Logger.debug("Removing user #{user_id} from guild #{guild_id}")
-    GenServer.call(via_tuple(guild_id), {:remove_user, user_id})
-  end
+  def register_guild(initial_values) do
+    callers = [self() | Process.get(:"$callers", [])]
+    guild_id = Keyword.get(initial_values, :guild_id)
 
-  def create_room(guild_id, room_id) do
-    Logger.debug("Creating room #{room_id} in guild #{guild_id}")
-    GenServer.call(via_tuple(guild_id), {:create_room, room_id})
-  end
-
-  def remove_room(guild_id, room_id) do
-    Logger.debug("Removing room #{room_id} from guild #{guild_id}")
-    GenServer.call(via_tuple(guild_id), {:remove_room, room_id})
-  end
-
-  def get_state(guild_id) do
-    GenServer.call(via_tuple(guild_id), :get_state)
-  end
-
-  # Create a new guild process
-  def start_guild(guild_id) do
-    Logger.debug("Attempting to create guild with ID: #{guild_id}")
-
-    case Registry.lookup(WS.SocketRegistry, "guild:#{guild_id}") do
-        [] ->
-          # Guild doesn't exist, start it
-          case GuildSupervisor.start_guild(guild_id) do
-            {:ok, pid} ->
-              Logger.info("Successfully created guild #{guild_id} with PID: #{inspect(pid)}")
-              {:ok, pid}
-
-            {:error, reason} ->
-              Logger.error("Failed to create guild #{guild_id}. Reason: #{reason}")
-              {:error, reason}
-          end
-
-        [{pid, _}] ->
-          Logger.warn("Guild #{guild_id} already exists with PID: #{inspect(pid)}")
-          {:error, :already_exists}
-      end
-  end
-
-  # Delete an existing guild process
-  def stop_guild(guild_id) do
-    Logger.debug("Attempting to delete guild with ID: #{guild_id}")
-
-    case get_state(guild_id) do
-      {:ok, state} when length(state.user_ids) > 0 ->
-        Logger.warn("Cannot stop guild #{guild_id} - still has #{length(state.user_ids)} users")
-        {:error, :has_users}
-
-      _ ->
-        case GuildSupervisor.terminate_guild(guild_id) do
-          :ok ->
-            Logger.info("Successfully deleted guild #{guild_id}")
-            :ok
-
-          {:error, :not_found} ->
-            Logger.warn("Guild #{guild_id} not found. Nothing to delete.")
-            {:error, :not_found}
-
-          {:error, reason} ->
-            Logger.error("Failed to delete guild #{guild_id}. Reason: #{reason}")
-            {:error, reason}
-        end
+    case DynamicSupervisor.start_child(WS.GuildSessionSupervisor, {__MODULE__, Keyword.merge(initial_values, callers: callers)}) do
+      {:ok, _pid} ->
+        :ok
+      {:error, {:already_started, pid}} ->
+        Logger.debug("Guild session already started, pid: #{inspect(pid)}")
+        {:ok, pid}
+      {:error, reason} ->
+        Logger.error("Failed to start guild session: #{inspect(reason)}")
+        {:error, reason}
     end
   end
 
-  # Auto-start guild when first user joins
-  def maybe_start_guild(guild_id) do
-    case Registry.lookup(WS.SocketRegistry, "guild:#{guild_id}") do
-      [] -> start_guild(guild_id)
-      _ -> {:ok, :already_running}
-    end
-  end
+  def child_spec(init), do: %{super(init) | id: Keyword.get(init, :guild_id)}
 
-  # Auto-stop guild when last user leaves
-  def maybe_stop_guild(guild_id) do
-    case get_state(guild_id) do
-      {:ok, state} when length(state.user_ids) == 0 ->
-        stop_guild(guild_id)
-      _ ->
-        {:ok, :users_remaining}
-    end
+  def count, do: Registry.count(WS.GuildSessionRegistry)
+  def lookup(guild_id), do: Registry.lookup(WS.GuildSessionRegistry, guild_id)
+
+  def start_link(init) do
+    GenServer.start_link(__MODULE__, init, name: via_tuple(init[:guild_id]))
   end
 
   @impl true
   def init(state) do
     Logger.info("Initializing guild with state: #{inspect(state)}")
     log_state_change("Initial state", state)
-    {:ok, state}
+    {:ok, struct(State, state)}
   end
 
-  defp log_state_change(action, state) do
+  defp log_state_change(action, %State{guild_id: guild_id, user_ids: user_ids} = state) do
     Logger.info("""
     Guild State Change - #{action}
     ============================
-    Guild ID: #{state.guild_id}
-    Users: #{inspect(state.user_ids)}
-    Rooms: #{inspect(state.rooms)}
+    Guild ID: #{inspect(guild_id)}
+    Users: #{inspect(user_ids)}
     ============================
     """)
   end
 
-  @impl true
-  def handle_call({:add_user, user_id}, _from, state) do
-    Logger.debug("Adding user #{user_id} to guild state: #{inspect(state)}")
+  ########################################################################
+  ## API
+  ########################################################################
 
-    if user_id in state.user_ids do
-      Logger.warn("User #{user_id} is already in the guild #{state.guild_id}")
-      {:reply, {:error, :user_already_added}, state}
-    else
-      users = [user_id | state.user_ids]
-      new_state = %{state | user_ids: users}
-      Logger.debug("Broadcasting user join event for #{user_id}")
-      PubSub.broadcast("guild:#{state.guild_id}", "#{user_id} joined the guild.")
-      PubSub.subscribe("guild:#{state.guild_id}")
-      log_state_change("Added user #{user_id}", new_state)
-      {:reply, :ok, new_state}
+  def ws_fan(user_ids, msg) do
+    Enum.each(user_ids, fn user_id ->
+      WS.UserSession.send_ws(user_id, msg)
+    end)
+  end
+
+  def broadcast_ws(guild_id, msg), do: cast(guild_id, {:broadcast_ws, msg})
+
+  defp broadcast_ws_impl(msg, state) do
+    ws_fan(state.user_ids, msg)
+    {:noreply, state}
+  end
+
+  def join_guild(guild_id, user_id) do
+    cast(guild_id, {:join_guild, user_id})
+  end
+
+  defp join_guild_impl(user_id, state) do
+    # Add user to chat process
+    WS.Chat.add_user(state.guild_id, user_id)
+
+    # Add user to guild state
+    new_user_ids = [user_id | Enum.filter(state.user_ids, fn uid -> uid != user_id end)]
+    new_state = %{state | user_ids: new_user_ids}
+
+    # Notify all users in guild that someone joined
+    ws_fan(new_user_ids, %{
+      "op" => "join_guild",
+      "guild_id" => state.guild_id,
+      "user_id" => user_id
+    })
+
+    {:noreply, new_state}
+  end
+
+  def leave_guild(guild_id, user_id), do: cast(guild_id, {:leave_guild, user_id})
+
+  defp leave_guild_impl(user_id, state) do
+    # Remove user from chat process
+    WS.Chat.remove_user(state.guild_id, user_id)
+
+    # Remove user from guild state
+    user_ids = Enum.reject(state.user_ids, &(&1 == user_id))
+    new_state = %{state | user_ids: user_ids}
+
+    # Notify remaining users that someone left
+    ws_fan(user_ids, %{
+      "op" => "leave_guild",
+      "guild_id" => state.guild_id,
+      "user_id" => user_id
+    })
+
+    case user_ids do
+      [] ->
+        {:stop, :normal, new_state}
+      _ ->
+        {:noreply, new_state}
     end
   end
 
-  @impl true
-  def handle_call({:remove_user, user_id}, _from, state) do
-    Logger.debug("Removing user #{user_id} from guild state: #{inspect(state)}")
-    user_ids = List.delete(state.user_ids, user_id)
+  def destroy(guild_id, user_id), do: cast(guild_id, {:destroy, user_id})
+
+  defp destroy_impl(user_id, state) do
+    user_ids = Enum.filter(state.user_ids, fn uid -> uid != user_id end)
+
+    ws_fan(user_ids, %{"op" => "guild_destroyed", "guild_id" => state.guild_id})
+
     new_state = %{state | user_ids: user_ids}
-    Logger.debug("Broadcasting user leave event for #{user_id}")
-    PubSub.broadcast("guild:#{state.guild_id}", %{event: :user_left, user_id: user_id})
-    log_state_change("Removed user #{user_id}", new_state)
-    {:reply, :ok, new_state}
+
+    case new_state.user_ids do
+      [] ->
+        {:stop, :normal, new_state}
+      _ ->
+        {:noreply, new_state}
+    end
   end
 
-  @impl true
-  def handle_call({:create_room, room_id}, _from, state) do
-    Logger.debug("Creating room #{room_id} in guild state: #{inspect(state)}")
-    rooms = [room_id | state.rooms]
-    new_state = %{state | rooms: rooms}
-    Logger.debug("Broadcasting room creation event for #{room_id}")
-    PubSub.broadcast("guild:#{state.guild_id}", "Room #{room_id} created.")
-    log_state_change("Created room #{room_id}", new_state)
-    {:reply, :ok, new_state}
-  end
+  ########################################################################
+  ## ROUTER
+  ########################################################################
 
-  @impl true
-  def handle_call({:remove_room, room_id}, _from, state) do
-    Logger.debug("Removing room #{room_id} from guild state: #{inspect(state)}")
-    rooms = List.delete(state.rooms, room_id)
-    new_state = %{state | rooms: rooms}
-    Logger.debug("Broadcasting room removal event for #{room_id}")
-    PubSub.broadcast("guild:#{state.guild_id}", "Room #{room_id} removed.")
-    log_state_change("Removed room #{room_id}", new_state)
-    {:reply, :ok, new_state}
-  end
-
-  @impl true
-  def handle_call(:get_state, _from, state) do
-    {:reply, state, state}
-  end
-
-  @impl true
-  def handle_info({:broadcast, message}, state) do
-    Logger.debug("Received broadcast message in guild #{state.guild_id}: #{message}")
-    # Optionally, you can take action based on the broadcast message.
-    {:noreply, state}
-  end
-
-  @impl true
-  def handle_info(message, state) do
-    Logger.error("WS.Guild received unexpected message in handle_info/2: #{inspect(message)}")
-    {:noreply, state}
-  end
+  def handle_cast({:broadcast_ws, msg}, state), do: broadcast_ws_impl(msg, state)
+  def handle_cast({:join_guild, user_id}, state), do: join_guild_impl(user_id, state)
+  def handle_cast({:leave_guild, user_id}, state), do: leave_guild_impl(user_id, state)
+  def handle_cast({:destroy, user_id}, state), do: destroy_impl(user_id, state)
 end

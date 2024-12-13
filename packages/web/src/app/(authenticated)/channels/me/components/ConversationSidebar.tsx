@@ -15,9 +15,12 @@ import LoggedInUserBox from "../../components/LoggedInUserBox";
 
 const ConversationSidebar = () => {
   const session = authClient.useSession();
-  const { data: dms } = useQuery({
-    queryKey: ["dms", session.data?.user?.id],
-    queryFn: () => client.api.dms.get(),
+  const { data: friends } = useQuery({
+    queryKey: ["friends", session.data?.user?.id],
+    queryFn: async () => {
+      const friends = await client.api.friendships.get();
+      return friends.data;
+    },
   });
 
   return (
@@ -61,19 +64,19 @@ const ConversationSidebar = () => {
             <span>Direct Messages</span>
             <Plus className="h-4 w-4" />
           </div>
-          {dms?.data?.map((dm) => (
+          {friends?.map((friend) => (
             <NextLink
-              key={dm.id}
-              href={`/channels/me/${dm.id}`}
+              key={friend.id}
+              href={`/channels/me/${friend.id}`}
               className={buttonVariants({
                 variant: "ghost",
                 className: "w-full justify-start px-2 mb-1 relative",
               })}
             >
               <Avatar className="h-8 w-8 mr-2">
-                <AvatarFallback>{dm.name?.[0] ?? "U"}</AvatarFallback>
+                <AvatarFallback>{friend.name ?? "U"}</AvatarFallback>
               </Avatar>
-              <span className="flex-grow text-left">{dm.name}</span>
+              <span className="flex-grow text-left">{friend.name}</span>
               {/* {dm.dm_channels.dm_channel_users?.unread > 0 && (
                 <span className="bg-red-500 text-white rounded-full px-2 py-1 text-xs absolute right-2">
                   {dm.dm_channels.dm_channel_users?.unread}

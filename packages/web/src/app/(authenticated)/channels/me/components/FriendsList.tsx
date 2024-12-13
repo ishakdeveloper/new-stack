@@ -87,6 +87,7 @@ const FriendsList = () => {
               description: `${data.username} declined your friend request`,
             });
           } else if (data.type === "friend_request_accepted") {
+            queryClient.invalidateQueries({ queryKey: ["dms"] });
             toast({
               title: "Friend Request Accepted",
               description: `${data.username} accepted your friend request`,
@@ -130,6 +131,7 @@ const FriendsList = () => {
     onSuccess: (data, id) => {
       queryClient.invalidateQueries({ queryKey: ["pendingRequests"] });
       queryClient.invalidateQueries({ queryKey: ["friends"] });
+      queryClient.invalidateQueries({ queryKey: ["dms"] });
 
       toast({
         title: "Friend request accepted!",
@@ -329,32 +331,31 @@ const FriendsList = () => {
         ) : (
           <div className="space-y-4">
             {filteredFriends?.map((friend) => (
-              <div
-                key={friend.id}
-                className="flex items-center mb-4 p-2 hover:bg-accent rounded-md"
-              >
-                <Avatar className="h-10 w-10 mr-3">
-                  <AvatarFallback>{friend.name[0]}</AvatarFallback>
-                </Avatar>
-                <div className="flex-grow">
-                  <div className="font-semibold">{friend.name}</div>
-                  <div className="text-sm text-muted-foreground">Online</div>
-                </div>
-                <ContextMenu>
-                  <ContextMenuTrigger>
+              <ContextMenu key={friend.id}>
+                <ContextMenuTrigger asChild>
+                  <div className="flex items-center mb-4 p-2 hover:bg-accent rounded-md cursor-pointer">
+                    <Avatar className="h-10 w-10 mr-3">
+                      <AvatarFallback>{friend.name[0]}</AvatarFallback>
+                    </Avatar>
+                    <div className="flex-grow">
+                      <div className="font-semibold">{friend.name}</div>
+                      <div className="text-sm text-muted-foreground">
+                        Online
+                      </div>
+                    </div>
                     <Button variant="ghost" size="sm">
                       <Users className="h-5 w-5" />
                     </Button>
-                  </ContextMenuTrigger>
-                  <ContextMenuContent>
-                    <ContextMenuItem
-                      onClick={() => handleRemoveFriend(friend.id)}
-                    >
-                      Remove Friend
-                    </ContextMenuItem>
-                  </ContextMenuContent>
-                </ContextMenu>
-              </div>
+                  </div>
+                </ContextMenuTrigger>
+                <ContextMenuContent>
+                  <ContextMenuItem
+                    onClick={() => handleRemoveFriend(friend.friendshipId)}
+                  >
+                    Remove Friend
+                  </ContextMenuItem>
+                </ContextMenuContent>
+              </ContextMenu>
             ))}
           </div>
         )}
