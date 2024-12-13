@@ -141,6 +141,22 @@ defmodule WS.SocketHandler do
             remote_send_impl(response, state)
         end
 
+      {:ok, %{"op" => "accept_friend_request", "to_user_id" => to_user_id}} ->
+        Logger.debug("Processing accept_friend_request operation")
+
+        case state.user do
+          nil ->
+            Logger.warn("Accept friend request attempt without registration")
+            response = %{"status" => "error", "message" => "You must register first"}
+            remote_send_impl(response, state)
+
+          %WS.User{id: _from_user_id} ->
+            UserSession.send_ws(to_user_id, %{"type" => "friend_request_accepted", "username" => state.user.name})
+
+            response = %{"status" => "success", "message" => "Friend request accepted"}
+            remote_send_impl(response, state)
+        end
+
       # Default case for unknown operations
       {:ok, %{"op" => op}} ->
         Logger.warn("Unknown operation received: #{op}, state: #{inspect(state)}")

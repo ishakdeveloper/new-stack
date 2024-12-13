@@ -69,10 +69,12 @@ const FriendsList = () => {
         // Handle the parsed data if it is a valid JSON message
         if (
           data.type === "friend_request" ||
-          data.type === "friend_request_declined"
+          data.type === "friend_request_declined" ||
+          data.type === "friend_request_accepted"
         ) {
           console.log("data", data);
           queryClient.invalidateQueries({ queryKey: ["pendingRequests"] });
+          queryClient.invalidateQueries({ queryKey: ["friends"] });
 
           if (data.type === "friend_request") {
             toast({
@@ -83,6 +85,11 @@ const FriendsList = () => {
             toast({
               title: "Friend Request Declined",
               description: `${data.username} declined your friend request`,
+            });
+          } else if (data.type === "friend_request_accepted") {
+            toast({
+              title: "Friend Request Accepted",
+              description: `${data.username} accepted your friend request`,
             });
           }
         }
@@ -127,6 +134,11 @@ const FriendsList = () => {
       toast({
         title: "Friend request accepted!",
         description: "You are now friends with the user.",
+      });
+
+      sendMessage({
+        op: "accept_friend_request",
+        to_user_id: data?.data?.friendship?.requesterId ?? "",
       });
     },
   });

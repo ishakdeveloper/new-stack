@@ -24,6 +24,7 @@ type WebSocketMessage =
   | { op: "send_global"; message: string }
   | { op: "friend_request"; to_user_id: string }
   | { op: "decline_friend_request"; to_user_id: string }
+  | { op: "accept_friend_request"; to_user_id: string }
   | { op: "ping" };
 
 type SocketContextType = {
