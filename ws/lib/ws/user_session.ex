@@ -22,7 +22,7 @@ defmodule WS.UserSession do
   end
 
   def start_link(init) do
-    GenServer.start_link(__MODULE__, init, name: via_tuple(Keyword.get(init, :user_id)))
+    GenServer.start_link(__MODULE__, init, name: via_tuple(init[:user_id]))
   end
 
   def via_tuple(user_id), do: {:via, Registry, {WS.UserSessionRegistry, user_id}}
@@ -58,9 +58,6 @@ defmodule WS.UserSession do
       {__MODULE__, Keyword.merge(initial_values, callers: callers)}
     ) do
       {:ok, _pid} ->
-        unless PubSub.subscribed?("user:#{user_id}") do
-          PubSub.subscribe("user:#{user_id}")
-        end
         :ok
       {:error, {:already_started, pid}} ->
         Logger.debug("User session already started, pid: #{inspect(pid)}")
@@ -71,10 +68,8 @@ defmodule WS.UserSession do
     end
   end
 
-
-  def notify_user(to_user_id, payload) do
-    Logger.debug("Notifying user: #{inspect(payload)}")
-    cast(to_user_id, {:notify_user, payload})
+  def remove_user(user_id) do
+    GenServer.stop(via_tuple(user_id))
   end
 
   def set_state(user_id, info), do: cast(user_id, {:set_state, info})
@@ -96,6 +91,15 @@ defmodule WS.UserSession do
     {:reply, :ok, %{state | pid: pid}}
   end
 
+  def send_ws(user_id, payload) do
+    cast(user_id, {:send_ws, payload})
+  end
+
+  defp send_ws_impl(payload, %State{pid: pid} = state) do
+    if pid, do: WS.SocketHandler.remote_send(pid, payload)
+    {:noreply, state}
+  end
+
   defp handle_disconnect(pid, state) do
     Logger.debug("Handling disconnect for pid: #{inspect(pid)}")
     {:stop, :normal, state}
@@ -110,24 +114,13 @@ defmodule WS.UserSession do
   def handle_info({:DOWN, _, :process, pid, _}, state), do: handle_disconnect(pid, state)
 
   @impl true
-  def handle_cast({:notify_user, payload}, %State{user_id: user_id} = state) do
-    Logger.debug("handle_cast: Handling notify_user cast from #{inspect(payload)}")
-
-
-    PubSub.broadcast("user:#{user_id}", {:notify_user, payload})
-
-    # Log state change (no need to manipulate the struct)
-    log_state_change("Received friend request", state)
-
-    {:noreply, state}
-  end
-
-  @impl true
-  def handle_call(:remove_user, _from, state) do
+  def handle_cast(:remove_user, %State{user_id: user_id} = state) do
     Logger.debug("Handling remove_user call, state: #{inspect(state)}")
-    PubSub.unsubscribe("user:#{state.user_id}")
+    PubSub.unsubscribe("user:#{user_id}")
     log_state_change("User removed", struct(State, state))
     {:stop, :normal, :ok, state}
   end
+
+  def handle_cast({:send_ws, payload}, state), do: send_ws_impl(payload, state)
 
 end

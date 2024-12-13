@@ -67,13 +67,24 @@ const FriendsList = () => {
         const data = JSON.parse(lastMessage.data);
 
         // Handle the parsed data if it is a valid JSON message
-        if (data.op === "notify_user") {
+        if (
+          data.type === "friend_request" ||
+          data.type === "friend_request_declined"
+        ) {
           console.log("data", data);
           queryClient.invalidateQueries({ queryKey: ["pendingRequests"] });
-          toast({
-            title: "New Friend Request",
-            description: `You received a friend request from ${data.data.payload.from_user_name}`,
-          });
+
+          if (data.type === "friend_request") {
+            toast({
+              title: "New Friend Request",
+              description: `You received a friend request from ${data.username}`,
+            });
+          } else if (data.type === "friend_request_declined") {
+            toast({
+              title: "Friend Request Declined",
+              description: `${data.username} declined your friend request`,
+            });
+          }
         }
       } catch (error) {
         // Handle the error if parsing fails, for example log it or show a toast
@@ -122,12 +133,17 @@ const FriendsList = () => {
 
   const declineFriendRequestMutation = useMutation({
     mutationFn: (id: string) => client.api.friendships({ id }).decline.patch(),
-    onSuccess: () => {
+    onSuccess: (data, id) => {
       queryClient.invalidateQueries({ queryKey: ["pendingRequests"] });
       queryClient.invalidateQueries({ queryKey: ["friends"] });
       toast({
         title: "Friend request declined!",
         description: "You will no longer receive updates from this user.",
+      });
+
+      sendMessage({
+        op: "decline_friend_request",
+        to_user_id: data?.data?.requesterId ?? "",
       });
     },
   });

@@ -9,18 +9,12 @@ defmodule WS.SocketHandler do
   defstruct user: nil,               # Holds the user information (a `WS.User` struct)
             compression: nil,         # Compression method, e.g., :zlib or nil
             encoding: :json,          # Encoding format (:json or :etf)
-            room_id: nil,            # Current room ID the user is in
-            guild_id: nil,           # Current guild ID the user is in
-            channel_id: nil,         # Current channel ID the user is in
             callers: []              # Process callers for context (if needed)
 
-  @type t :: %__MODULE__{
+  @type state :: %__MODULE__{
     user: nil | WS.User.t(),
     compression: nil | :zlib,
     encoding: :json | :etf,
-    room_id: nil | String.t(),
-    guild_id: nil | String.t(),
-    channel_id: nil | String.t(),
     callers: [pid]
   }
 
@@ -47,9 +41,6 @@ defmodule WS.SocketHandler do
     state = %__MODULE__{
       compression: compression,
       encoding: encoding,
-      room_id: nil,
-      guild_id: nil,
-      channel_id: nil,
       callers: []
     }
 
@@ -107,12 +98,12 @@ defmodule WS.SocketHandler do
             "user_id" => user.id
           }
 
-          {:reply, {:text, encode_message(response, state.compression)}, updated_state}
+          remote_send_impl(response, updated_state)
         else
           {:error, reason} ->
             Logger.error("Registration failed: #{reason}, state: #{inspect(state)}")
             response = %{"status" => "error", "message" => reason}
-            {:reply, {:text, encode_message(response, state.compression)}, state}
+            remote_send_impl(response, state)
         end
 
         # Send a friend request
@@ -122,52 +113,112 @@ defmodule WS.SocketHandler do
           nil ->
             Logger.warn("Friend request attempt without registration")
             response = %{"status" => "error", "message" => "You must register first"}
-            {:reply, {:text, encode_message(response, state.compression)}, state}
-
+            remote_send_impl(response, state)
           %WS.User{id: _from_user_id} ->
             # Send notification to addressee
-            UserSession.notify_user(
-              to_user_id,
-              %{
-                "type" => "friend_request",
-                "payload" => %{
-                  "from_user_id" => state.user.id,
-                  "from_user_name" => state.user.name
-                }
-              }
-            )
+            UserSession.send_ws(to_user_id, %{
+              "type" => "friend_request",
+              "username" => state.user.name
+            })
+
             response = %{"status" => "success", "message" => "Friend request sent"}
-            {:reply, {:text, encode_message(response, state.compression)}, state}
+            remote_send_impl(response, state)
         end
 
-      {:ok, %{"op" => "decline_friend_request", "from_user_id" => from_user_id}} ->
+      {:ok, %{"op" => "decline_friend_request", "to_user_id" => to_user_id}} ->
         Logger.debug("Processing decline_friend_request operation")
 
-        UserSession.decline_friend_request(from_user_id)
+        case state.user do
+          nil ->
+            Logger.warn("Decline friend request attempt without registration")
+            response = %{"status" => "error", "message" => "You must register first"}
+            remote_send_impl(response, state)
 
-        response = %{"status" => "success", "message" => "Friend request declined"}
-        {:reply, {:text, encode_message(response, state.compression)}, state}
+          %WS.User{id: _from_user_id} ->
+            UserSession.send_ws(to_user_id, %{"type" => "friend_request_declined", "username" => state.user.name})
+
+            response = %{"status" => "success", "message" => "Friend request declined"}
+            remote_send_impl(response, state)
+        end
 
       # Default case for unknown operations
       {:ok, %{"op" => op}} ->
         Logger.warn("Unknown operation received: #{op}, state: #{inspect(state)}")
         response = %{"status" => "error", "message" => "Unknown operation #{op}"}
-        {:reply, {:text, encode_message(response, state.compression)}, state}
+        remote_send_impl(response, state)
 
       _ ->
         Logger.error("Invalid message format received, state: #{inspect(state)}")
-        {:reply, {:text, encode_message(%{"status" => "error", "message" => "Invalid message format"}, state.compression)}, state}
+        remote_send_impl(%{"status" => "error", "message" => "Invalid message format"}, state)
     end
   end
 
-  def websocket_info({:broadcast, {:notify_user, payload}}, state) do
-    Logger.debug("INFO: Handling notify_user broadcast from #{inspect(payload)}")
+  # unsub from PubSub topic
+  def unsub(socket, topic), do: send(socket, {:unsub, topic})
 
-    {:reply, {:text, encode_message(
-      %{"op" => "notify_user",
-      "data" => payload},
-      state.compression
-    )}, state}
+  defp unsub_impl(topic, state) do
+    PubSub.unsubscribe(topic)
+    ws_push(nil, state)
+  end
+
+  def ws_push(frame, state) do
+    {List.wrap(frame), state}
+  end
+
+  def remote_send(socket, message) do
+    send(socket, {:remote_send, message})
+  end
+
+  defp remote_send_impl(message, state) do
+    ws_push(prepare_socket_msg(message, state), state)
+  end
+
+  def prepare_socket_msg(data, state) do
+    data
+    |> encode_data(state)
+    |> prepare_data(state)
+  end
+
+  defp encode_data(data, %{encoding: :etf}) do
+    data
+    |> Map.from_struct()
+    |> :erlang.term_to_binary()
+  end
+
+  defp encode_data(data, %{encoding: :json}) do
+    Jason.encode!(data)
+  end
+
+  defp prepare_data(data, %{compression: :zlib}) do
+    z = :zlib.open()
+
+    :zlib.deflateInit(z)
+    data = :zlib.deflate(z, data, :finish)
+    :zlib.deflateEnd(z)
+
+    {:binary, data}
+  end
+
+  defp prepare_data(data, %{encoding: :etf}) do
+    {:binary, data}
+  end
+
+  defp prepare_data(data, %{encoding: :json}) do
+    {:text, data}
+  end
+
+  @impl true
+  def websocket_info({:EXIT, _, _}, state), do: exit_impl(state)
+  def websocket_info(:exit, state), do: exit_impl(state)
+  def websocket_info({:unsub, topic}, state), do: unsub_impl(topic, state)
+  def websocket_info({:remote_send, payload}, state) do
+    Logger.debug("INFO: Handling remote_send broadcast from #{inspect(payload)}")
+
+    remote_send_impl(payload, state)
+  end
+
+  def websocket_info(_, state) do
+    ws_push(nil, state)
   end
 
   ###############################################################
@@ -182,6 +233,11 @@ defmodule WS.SocketHandler do
 
   #   :ok
   # end
+
+  def exit(pid), do: send(pid, :exit)
+  defp exit_impl(state) do
+    ws_push([{:close, 4003, "killed by server"}, shutdown: :normal], state)
+  end
 
   ###############################################################
   ## Helper Functions

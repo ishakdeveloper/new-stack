@@ -23,6 +23,7 @@ type WebSocketMessage =
   | { op: "send_dm"; to_user_id: string; message: string }
   | { op: "send_global"; message: string }
   | { op: "friend_request"; to_user_id: string }
+  | { op: "decline_friend_request"; to_user_id: string }
   | { op: "ping" };
 
 type SocketContextType = {
