@@ -20,10 +20,6 @@ const ConversationSidebar = () => {
     queryFn: () => client.api.dms.get(),
   });
 
-  useEffect(() => {
-    console.log("dms", dms);
-  }, []);
-
   return (
     <div className="w-60 border-r flex flex-col">
       <div className="p-4 flex items-center justify-between border-b">
@@ -67,19 +63,17 @@ const ConversationSidebar = () => {
           </div>
           {dms?.data?.map((dm) => (
             <NextLink
-              key={dm.dm_channels.id}
-              href={`/channels/me/${dm.dm_channels.id}`}
+              key={dm.id}
+              href={`/channels/me/${dm.id}`}
               className={buttonVariants({
                 variant: "ghost",
                 className: "w-full justify-start px-2 mb-1 relative",
               })}
             >
               <Avatar className="h-8 w-8 mr-2">
-                <AvatarFallback>
-                  {dm.dm_channels.name?.[0] ?? "U"}
-                </AvatarFallback>
+                <AvatarFallback>{dm.name?.[0] ?? "U"}</AvatarFallback>
               </Avatar>
-              <span className="flex-grow text-left">{dm.dm_channels.name}</span>
+              <span className="flex-grow text-left">{dm.name}</span>
               {/* {dm.dm_channels.dm_channel_users?.unread > 0 && (
                 <span className="bg-red-500 text-white rounded-full px-2 py-1 text-xs absolute right-2">
                   {dm.dm_channels.dm_channel_users?.unread}

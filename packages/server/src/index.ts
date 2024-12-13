@@ -22,6 +22,7 @@ import {
 } from "./modules/messages";
 import { channelRoutes } from "./modules/channels";
 import { dmRoutes } from "./modules/dm";
+import { userRoutes } from "./modules/user";
 
 const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(",") || [];
 
@@ -54,6 +55,7 @@ export const app = new Elysia()
   .group("/api", (app) =>
     app
       .use(authRoutes)
+      .use(userRoutes)
       .use(guildRoutes)
       .use(inviteRoutes)
       .use(friendshipRoutes)

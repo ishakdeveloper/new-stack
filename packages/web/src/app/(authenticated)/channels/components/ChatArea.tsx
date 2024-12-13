@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useUserStore } from "@/stores/useUserStore";
 import UserProfilePopup from "./UserProfilePopup";
+import { PopoverTrigger, Popover } from "@/components/ui/popover";
 
 const ChatArea = () => {
   const currentGuildId = useGuildStore((state) => state.currentGuildId);
@@ -93,8 +94,7 @@ const ChatArea = () => {
               className="mb-4 group hover:bg-accent hover:rounded-md p-2 relative"
             >
               <div className="flex items-center mb-1">
-                <UserProfilePopup
-                  user={message.author}
+                <Popover
                   open={
                     userProfileOpen && selectedUser?.id === message.author?.id
                   }
@@ -103,12 +103,26 @@ const ChatArea = () => {
                     if (!open) setSelectedUser(null);
                   }}
                 >
-                  <div onClick={() => handleUserClick(message.author)}>
-                    <Avatar className="h-8 w-8 mr-2 cursor-pointer hover:opacity-80">
-                      <AvatarFallback>{message.author?.name[0]}</AvatarFallback>
-                    </Avatar>
-                  </div>
-                </UserProfilePopup>
+                  <PopoverTrigger asChild>
+                    <div onClick={() => handleUserClick(message.author)}>
+                      <Avatar className="h-8 w-8 mr-2 cursor-pointer hover:opacity-80">
+                        <AvatarFallback>
+                          {message.author?.name[0]}
+                        </AvatarFallback>
+                      </Avatar>
+                    </div>
+                  </PopoverTrigger>
+                  <UserProfilePopup
+                    userId={message.author?.id ?? ""}
+                    open={
+                      userProfileOpen && selectedUser?.id === message.author?.id
+                    }
+                    onOpenChange={(open) => {
+                      setUserProfileOpen(open);
+                      if (!open) setSelectedUser(null);
+                    }}
+                  />
+                </Popover>
                 <div
                   className="font-semibold cursor-pointer hover:underline"
                   onClick={() => handleUserClick(message.author)}

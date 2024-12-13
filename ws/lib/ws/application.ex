@@ -8,12 +8,8 @@ defmodule Ws.Application do
   @impl true
   def start(_type, _args) do
     children = [
-      {Registry, keys: :unique, name: WS.SocketRegistry},
       WS.PubSub,
-      {WS.SessionSupervisor, []},
-      {WS.GuildSupervisor, []},
-      WS.Room,
-      WS.Guild,
+      WS.UserSessionSupervisor,
       {Plug.Cowboy, scheme: :http, plug: Ws, options: [port: 4001, dispatch: dispatch()]}
     ]
 

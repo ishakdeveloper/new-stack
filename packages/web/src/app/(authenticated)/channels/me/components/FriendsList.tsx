@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -25,6 +25,7 @@ import {
   ContextMenuContent,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import { useSocket } from "@/providers/SocketProvider";
 
 const FriendsList = () => {
   const [activeTab, setActiveTab] = useState<
@@ -33,6 +34,7 @@ const FriendsList = () => {
   const [friendUsername, setFriendUsername] = useState("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { sendMessage, lastMessage, isConnected } = useSocket(); // Use the useSocket hook
 
   // Queries for fetching data
   const { data: friends, isLoading: loadingFriends } = useQuery({
@@ -50,17 +52,52 @@ const FriendsList = () => {
     },
   });
 
+  useEffect(() => {
+    if (lastMessage) {
+      try {
+        // Check if the message is "pong", and handle it separately
+        if (lastMessage.data === "pong") {
+          // Handle heartbeat "pong" without parsing
+          return;
+        }
+
+        // console.log("lastMessage", lastMessage);
+
+        // Try to parse the message as JSON
+        const data = JSON.parse(lastMessage.data);
+
+        // Handle the parsed data if it is a valid JSON message
+        if (data.op === "notify_user") {
+          console.log("data", data);
+          queryClient.invalidateQueries({ queryKey: ["pendingRequests"] });
+          toast({
+            title: "New Friend Request",
+            description: `You received a friend request from ${data.data.payload.from_user_name}`,
+          });
+        }
+      } catch (error) {
+        // Handle the error if parsing fails, for example log it or show a toast
+        console.error("Failed to parse message", error);
+      }
+    }
+  }, [lastMessage, queryClient, toast]);
   // Mutations for actions
   const sendRequestMutation = useMutation({
     mutationFn: () =>
       client.api.friendships.post({ addresseeName: friendUsername }),
-    onSuccess: () => {
+    onSuccess: (data) => {
+      console.log("data", data);
       queryClient.invalidateQueries({ queryKey: ["pendingRequests"] }); // Refresh pending requests
       toast({
         title: "Friend request sent!",
         description: "You can now wait for the user to accept your request.",
       });
       setFriendUsername("");
+
+      sendMessage({
+        op: "friend_request",
+        to_user_id: data?.data?.addresseeId ?? "",
+      });
     },
     onError: () => {
       toast({
@@ -163,8 +200,14 @@ const FriendsList = () => {
             variant={activeTab === "pending" ? "default" : "ghost"}
             size="sm"
             onClick={() => setActiveTab("pending")}
+            className="relative"
           >
             Pending
+            {pendingRequests?.data && pendingRequests.data.length > 0 && (
+              <div className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                {pendingRequests.data.length}
+              </div>
+            )}
           </Button>
           <Button
             variant={activeTab === "blocked" ? "default" : "ghost"}
@@ -244,76 +287,48 @@ const FriendsList = () => {
                       Accept
                     </Button>
                     <Button
-                      variant="ghost"
+                      variant="destructive"
                       size="sm"
                       onClick={() => handleDeclineFriendRequest(request.id)}
                     >
                       Decline
                     </Button>
                   </div>
-                ) : (
-                  <div className="text-sm text-muted-foreground italic">
-                    Waiting for response...
-                  </div>
-                )}
+                ) : null}
               </div>
             ))
           )
-        ) : loadingFriends ? (
-          <div>Loading friends...</div>
         ) : (
-          filteredFriends?.map((friend) => (
-            <ContextMenu key={friend.id}>
-              <ContextMenuTrigger>
-                <Link href={`/channels/me/${friend.id}`}>
-                  <div className="flex items-center mb-4 p-2 hover:bg-accent rounded-md">
-                    <Avatar className="h-10 w-10 mr-3">
-                      <AvatarFallback>{friend.name[0]}</AvatarFallback>
-                    </Avatar>
-                    <div className="flex-grow">
-                      <div className="font-semibold">{friend.name}</div>
-                      <div className="text-sm text-muted-foreground">
-                        {friend.status}
-                      </div>
-                    </div>
-                    <div className="flex space-x-2">
-                      <Button variant="ghost" size="icon">
-                        <MessageSquare className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon">
-                        <PhoneCall className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon">
-                        <Video className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </Link>
-              </ContextMenuTrigger>
-              <ContextMenuContent>
-                <ContextMenuItem>
-                  <MessageSquare className="mr-2 h-4 w-4" />
-                  Send Message
-                </ContextMenuItem>
-                <ContextMenuItem>
-                  <PhoneCall className="mr-2 h-4 w-4" />
-                  Start Voice Call
-                </ContextMenuItem>
-                <ContextMenuItem>
-                  <Video className="mr-2 h-4 w-4" />
-                  Start Video Call
-                </ContextMenuItem>
-                <ContextMenuSeparator />
-                <ContextMenuItem
-                  className="text-red-600"
-                  onClick={() => handleRemoveFriend(friend.friendshipId)}
-                >
-                  <Trash className="mr-2 h-4 w-4" />
-                  Remove Friend
-                </ContextMenuItem>
-              </ContextMenuContent>
-            </ContextMenu>
-          ))
+          <div className="space-y-4">
+            {filteredFriends?.map((friend) => (
+              <div
+                key={friend.id}
+                className="flex items-center mb-4 p-2 hover:bg-accent rounded-md"
+              >
+                <Avatar className="h-10 w-10 mr-3">
+                  <AvatarFallback>{friend.name[0]}</AvatarFallback>
+                </Avatar>
+                <div className="flex-grow">
+                  <div className="font-semibold">{friend.name}</div>
+                  <div className="text-sm text-muted-foreground">Online</div>
+                </div>
+                <ContextMenu>
+                  <ContextMenuTrigger>
+                    <Button variant="ghost" size="sm">
+                      <Users className="h-5 w-5" />
+                    </Button>
+                  </ContextMenuTrigger>
+                  <ContextMenuContent>
+                    <ContextMenuItem
+                      onClick={() => handleRemoveFriend(friend.id)}
+                    >
+                      Remove Friend
+                    </ContextMenuItem>
+                  </ContextMenuContent>
+                </ContextMenu>
+              </div>
+            ))}
+          </div>
         )}
       </ScrollArea>
     </div>

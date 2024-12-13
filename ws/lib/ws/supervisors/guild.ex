@@ -29,7 +29,7 @@ defmodule WS.GuildSupervisor do
 
   def terminate_guild(guild_id) do
     Logger.debug("Terminating guild process for guild_id: #{guild_id}")
-    case Registry.lookup(WS.SocketRegistry, "guild:#{guild_id}") do
+    case Registry.lookup(WS.GuildSessionRegistry, "guild:#{guild_id}") do
       [{pid, _}] -> DynamicSupervisor.terminate_child(__MODULE__, pid)
       [] -> {:error, :not_found}
     end

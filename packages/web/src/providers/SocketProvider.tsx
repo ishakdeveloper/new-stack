@@ -21,7 +21,9 @@ type WebSocketMessage =
   | { op: "join_room"; room_id: string }
   | { op: "leave_room"; room_id: string }
   | { op: "send_dm"; to_user_id: string; message: string }
-  | { op: "send_global"; message: string };
+  | { op: "send_global"; message: string }
+  | { op: "friend_request"; to_user_id: string }
+  | { op: "ping" };
 
 type SocketContextType = {
   sendMessage: (message: WebSocketMessage) => void;
@@ -45,7 +47,6 @@ export const SocketProvider: React.FC<{
     readyState,
   } = useWebSocket(socketUrl, {
     shouldReconnect: () => true,
-    reconnectAttempts: 10,
     reconnectInterval: 0, // Set to 0 for immediate reconnection
     retryOnError: true,
     onOpen: () => console.log("WebSocket connection opened"),
@@ -74,6 +75,21 @@ export const SocketProvider: React.FC<{
     },
     [sendRawMessage, isConnected]
   );
+
+  useEffect(() => {
+    let heartbeatInterval: NodeJS.Timeout | null = null;
+
+    if (isConnected) {
+      // Send a "ping" message every 30 seconds
+      heartbeatInterval = setInterval(() => {
+        sendMessage({ op: "ping" });
+      }, 5000) as unknown as NodeJS.Timeout; // 5 seconds
+    }
+
+    return () => {
+      if (heartbeatInterval) clearInterval(heartbeatInterval);
+    };
+  }, [isConnected, sendMessage]);
 
   return (
     <SocketContext.Provider value={{ sendMessage, lastMessage, isConnected }}>

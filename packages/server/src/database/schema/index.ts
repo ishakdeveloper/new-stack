@@ -12,6 +12,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { createSelectSchema } from "drizzle-typebox";
 import { t } from "elysia";
+import { Static } from "@sinclair/typebox";
 
 // Guilds Table
 export const guilds = pgTable("guilds", {
@@ -26,11 +27,13 @@ export const guilds = pgTable("guilds", {
 });
 
 export const GuildSchema = createSelectSchema(guilds);
+export type Guild = Static<typeof GuildSchema>;
 export const GuildCreateSchema = t.Omit(GuildSchema, [
   "id",
   "createdAt",
   "updatedAt",
 ]);
+export type GuildCreate = Static<typeof GuildCreateSchema>;
 
 // Guild-Users Table (Many-to-Many)
 export const guildMembers = pgTable("guild_members", {
@@ -46,10 +49,12 @@ export const guildMembers = pgTable("guild_members", {
 });
 
 export const GuildMemberSchema = createSelectSchema(guildMembers);
+export type GuildMember = Static<typeof GuildMemberSchema>;
 export const GuildMemberCreateSchema = t.Omit(GuildMemberSchema, [
   "id",
   "joinedAt",
 ]);
+export type GuildMemberCreate = Static<typeof GuildMemberCreateSchema>;
 
 // Categories Table
 export const categories = pgTable("categories", {
@@ -67,11 +72,13 @@ export const categories = pgTable("categories", {
 });
 
 export const CategorySchema = createSelectSchema(categories);
+export type Category = Static<typeof CategorySchema>;
 export const CategoryCreateSchema = t.Omit(CategorySchema, [
   "id",
   "createdAt",
   "updatedAt",
 ]);
+export type CategoryCreate = Static<typeof CategoryCreateSchema>;
 
 // Channels (Rooms) Table
 export const channels = pgTable("channels", {
@@ -91,11 +98,13 @@ export const channels = pgTable("channels", {
 });
 
 export const ChannelSchema = createSelectSchema(channels);
+export type Channel = Static<typeof ChannelSchema>;
 export const ChannelCreateSchema = t.Omit(ChannelSchema, [
   "id",
   "createdAt",
   "updatedAt",
 ]);
+export type ChannelCreate = Static<typeof ChannelCreateSchema>;
 
 export const dmChannels = pgTable("dm_channels", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -108,10 +117,12 @@ export const dmChannels = pgTable("dm_channels", {
 });
 
 export const DMChannelSchema = createSelectSchema(dmChannels);
+export type DMChannel = Static<typeof DMChannelSchema>;
 export const DMChannelCreateSchema = t.Omit(DMChannelSchema, [
   "id",
   "createdAt",
 ]);
+export type DMChannelCreate = Static<typeof DMChannelCreateSchema>;
 
 // DM Channel Users Table (Many-to-Many)
 export const dmChannelUsers = pgTable("dm_channel_users", {
@@ -126,10 +137,12 @@ export const dmChannelUsers = pgTable("dm_channel_users", {
 });
 
 export const DMChannelUserSchema = createSelectSchema(dmChannelUsers);
+export type DMChannelUser = Static<typeof DMChannelUserSchema>;
 export const DMChannelUserCreateSchema = t.Omit(DMChannelUserSchema, [
   "id",
   "joinedAt",
 ]);
+export type DMChannelUserCreate = Static<typeof DMChannelUserCreateSchema>;
 
 export const roles = pgTable("roles", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -143,7 +156,9 @@ export const roles = pgTable("roles", {
 });
 
 export const RoleSchema = createSelectSchema(roles);
+export type Role = Static<typeof RoleSchema>;
 export const RoleCreateSchema = t.Omit(RoleSchema, ["id", "createdAt"]);
+export type RoleCreate = Static<typeof RoleCreateSchema>;
 
 // Friendships Table
 export const friendships = pgTable("friendships", {
@@ -160,12 +175,14 @@ export const friendships = pgTable("friendships", {
 });
 
 export const FriendshipSchema = createSelectSchema(friendships);
+export type Friendship = Static<typeof FriendshipSchema>;
 export const FriendshipCreateSchema = t.Omit(FriendshipSchema, [
   "id",
   "createdAt",
   "updatedAt",
   "status",
 ]);
+export type FriendshipCreate = Static<typeof FriendshipCreateSchema>;
 
 // Messages Table
 export const messages = pgTable("messages", {
@@ -186,11 +203,13 @@ export const messages = pgTable("messages", {
 });
 
 export const MessageSchema = createSelectSchema(messages);
+export type Message = Static<typeof MessageSchema>;
 export const MessageCreateSchema = t.Omit(MessageSchema, [
   "id",
   "createdAt",
   "updatedAt",
 ]);
+export type MessageCreate = Static<typeof MessageCreateSchema>;
 
 export const guildInviteLinks = pgTable("guild_invite_links", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -209,12 +228,14 @@ export const guildInviteLinks = pgTable("guild_invite_links", {
 });
 
 export const GuildInviteLinkSchema = createSelectSchema(guildInviteLinks);
+export type GuildInviteLink = Static<typeof GuildInviteLinkSchema>;
 export const GuildInviteLinkCreateSchema = t.Omit(GuildInviteLinkSchema, [
   "id",
   "createdAt",
   "uses",
   "status",
 ]);
+export type GuildInviteLinkCreate = Static<typeof GuildInviteLinkCreateSchema>;
 
 export const inviteLinkUsages = pgTable("invite_link_usages", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -228,10 +249,12 @@ export const inviteLinkUsages = pgTable("invite_link_usages", {
 });
 
 export const InviteLinkUsageSchema = createSelectSchema(inviteLinkUsages);
+export type InviteLinkUsage = Static<typeof InviteLinkUsageSchema>;
 export const InviteLinkUsageCreateSchema = t.Omit(InviteLinkUsageSchema, [
   "id",
   "usedAt",
 ]);
+export type InviteLinkUsageCreate = Static<typeof InviteLinkUsageCreateSchema>;
 
 export const guildInviteLinksRelations = relations(
   guildInviteLinks,

@@ -165,15 +165,13 @@ export const friendshipRoutes = new Elysia()
       throw new Error("Friend request not found.");
     }
 
-    const updatedRequest = await db
-      .update(friendships)
-      .set({
-        status: "declined",
-      })
+    // Delete the declined friend request
+    const deletedRequest = await db
+      .delete(friendships)
       .where(eq(friendships.id, id))
       .returning();
 
-    return updatedRequest[0];
+    return deletedRequest[0];
   })
 
   // Get pending friend requests for the user
