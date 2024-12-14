@@ -11,7 +11,7 @@ defmodule WS.Guild do
       user_ids: [String.t()],
     }
 
-    defstruct guild_id: nil,
+    defstruct guild_id: "",
               user_ids: []
 
   end
@@ -22,22 +22,42 @@ defmodule WS.Guild do
   defp call(user_id, params), do: GenServer.call(via_tuple(user_id), params)
 
   def register_guild(initial_values) do
+    Logger.debug("Registering guild #{inspect(initial_values)}")
     callers = [self() | Process.get(:"$callers", [])]
-    guild_id = Keyword.get(initial_values, :guild_id)
 
-    case DynamicSupervisor.start_child(WS.GuildSessionSupervisor, {__MODULE__, Keyword.merge(initial_values, callers: callers)}) do
-      {:ok, _pid} ->
-        :ok
-      {:error, {:already_started, pid}} ->
-        Logger.debug("Guild session already started, pid: #{inspect(pid)}")
+    # Ensure `initial_values` is a map
+    initial_values = Map.new(initial_values)
+
+    guild_id = Map.get(initial_values, :guild_id)
+
+    case lookup(guild_id) do
+      [] ->
+        # No process exists; start a new one
+        Logger.info("Starting guild session for guild_id: #{guild_id}")
+        case DynamicSupervisor.start_child(
+               WS.GuildSessionSupervisor,
+               {__MODULE__, Map.merge(initial_values, %{callers: callers})}
+             ) do
+          {:ok, pid} ->
+            Logger.info("Started guild session for guild_id: #{guild_id}")
+            {:ok, pid}
+
+          {:error, {:already_started, pid}} ->
+            Logger.debug("Guild session already started for guild_id: #{guild_id}, pid: #{inspect(pid)}")
+            {:ok, pid}
+
+          {:error, reason} ->
+            Logger.error("Failed to start guild session for guild_id: #{guild_id}, reason: #{inspect(reason)}")
+            {:error, reason}
+        end
+
+      [{pid, _value}] ->
+        # Process already exists; return the pid
         {:ok, pid}
-      {:error, reason} ->
-        Logger.error("Failed to start guild session: #{inspect(reason)}")
-        {:error, reason}
     end
   end
 
-  def child_spec(init), do: %{super(init) | id: Keyword.get(init, :guild_id)}
+  def child_spec(init), do: %{super(init) | id: Map.get(init, :guild_id)}
 
   def count, do: Registry.count(WS.GuildSessionRegistry)
   def lookup(guild_id), do: Registry.lookup(WS.GuildSessionRegistry, guild_id)
@@ -48,12 +68,17 @@ defmodule WS.Guild do
 
   @impl true
   def init(state) do
-    Logger.info("Initializing guild with state: #{inspect(state)}")
+    # register chat
+    WS.Chat.register_chat(guild_id: state.guild_id)
+
     log_state_change("Initial state", state)
     {:ok, struct(State, state)}
   end
 
-  defp log_state_change(action, %State{guild_id: guild_id, user_ids: user_ids} = state) do
+  defp log_state_change(action, state) when is_map(state) do
+    guild_id = Map.get(state, :guild_id)
+    user_ids = Map.get(state, :user_ids)
+
     Logger.info("""
     Guild State Change - #{action}
     ============================
@@ -85,12 +110,16 @@ defmodule WS.Guild do
   end
 
   defp join_guild_impl(user_id, state) do
+    Logger.debug("Joining guild - guild_id: #{state.guild_id}, user_id: #{user_id}")
+
     # Add user to chat process
     WS.Chat.add_user(state.guild_id, user_id)
 
     # Add user to guild state
     new_user_ids = [user_id | Enum.filter(state.user_ids, fn uid -> uid != user_id end)]
     new_state = %{state | user_ids: new_user_ids}
+
+    Logger.debug("Guild state after join - guild_id: #{state.guild_id}, user_ids: #{inspect(new_user_ids)}")
 
     # Notify all users in guild that someone joined
     ws_fan(new_user_ids, %{
@@ -112,6 +141,8 @@ defmodule WS.Guild do
     user_ids = Enum.reject(state.user_ids, &(&1 == user_id))
     new_state = %{state | user_ids: user_ids}
 
+    Logger.debug("Guild state after leave - guild_id: #{state.guild_id}, user_ids: #{inspect(user_ids)}")
+
     # Notify remaining users that someone left
     ws_fan(user_ids, %{
       "op" => "leave_guild",
@@ -121,6 +152,7 @@ defmodule WS.Guild do
 
     case user_ids do
       [] ->
+        Logger.info("No users left in guild #{state.guild_id}. Stopping process.")
         {:stop, :normal, new_state}
       _ ->
         {:noreply, new_state}

@@ -8,7 +8,7 @@ import { Hash, MoreVertical } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { client } from "@/utils/client";
 import { useGuildStore } from "@/stores/useGuildStore";
-import { useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -19,6 +19,7 @@ import {
 import { useUserStore } from "@/stores/useUserStore";
 import UserProfilePopup from "./UserProfilePopup";
 import { PopoverTrigger, Popover } from "@/components/ui/popover";
+import { useSocket } from "@/providers/SocketProvider";
 
 const ChatArea = () => {
   const currentGuildId = useGuildStore((state) => state.currentGuildId);
@@ -28,6 +29,16 @@ const ChatArea = () => {
   const [message, setMessage] = useState("");
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [userProfileOpen, setUserProfileOpen] = useState(false);
+  const scrollAreaRef = useRef<HTMLDivElement | null>(null);
+  const {
+    sendMessage: sendSocketMessage,
+    lastMessage,
+    isConnected,
+  } = useSocket();
+
+  const scrollToBottom = () => {
+    scrollAreaRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
 
   const { data: channel } = useQuery({
     queryKey: ["channel", currentChannelId],
@@ -65,6 +76,16 @@ const ChatArea = () => {
       await queryClient.invalidateQueries({
         queryKey: ["messages", currentChannelId],
       });
+
+      // Send websocket message
+      sendSocketMessage({
+        op: "chat_message",
+        guild_id: currentGuildId ?? "",
+        content: message,
+      });
+
+      scrollToBottom();
+
       setMessage(""); // Clear input after sending
     },
   });
@@ -72,6 +93,7 @@ const ChatArea = () => {
   const handleSendMessage = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!message.trim()) return; // Don't send empty messages
+
     await sendMessage();
   };
 
@@ -79,6 +101,35 @@ const ChatArea = () => {
     setSelectedUser(user);
     setUserProfileOpen(true);
   };
+
+  useEffect(() => {
+    if (lastMessage) {
+      try {
+        if (lastMessage.data === "pong") {
+          return;
+        }
+
+        const data = JSON.parse(lastMessage.data);
+
+        if (data.type === "message_received") {
+          queryClient.invalidateQueries({
+            queryKey: ["messages", currentChannelId],
+          });
+
+          scrollToBottom();
+        }
+      } catch (error) {
+        console.error("Failed to parse message:", error);
+      }
+    }
+
+    scrollToBottom();
+  }, [lastMessage, queryClient, currentChannelId]);
+
+  // Scroll to the bottom when the component first mounts
+  useEffect(() => {
+    scrollToBottom();
+  }, []);
 
   return (
     <div className="flex-grow flex flex-col">
@@ -130,7 +181,35 @@ const ChatArea = () => {
                   {message.author?.name}
                 </div>
                 <div className="text-muted-foreground text-xs ml-2">
-                  {message.createdAt.toLocaleString()}
+                  {(() => {
+                    const date = new Date(message.createdAt);
+                    const today = new Date();
+                    const yesterday = new Date();
+                    yesterday.setDate(today.getDate() - 1);
+
+                    if (date.toDateString() === today.toDateString()) {
+                      return `Today ${date.toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}`;
+                    } else if (
+                      date.toDateString() === yesterday.toDateString()
+                    ) {
+                      return `Yesterday ${date.toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}`;
+                    } else {
+                      return (
+                        date.toLocaleDateString() +
+                        " " +
+                        date.toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
+                      );
+                    }
+                  })()}
                 </div>
                 {message.author?.id === currentUser?.id && (
                   <div className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity">
@@ -154,6 +233,7 @@ const ChatArea = () => {
             </div>
           ))}
         </div>
+        <div ref={scrollAreaRef}></div>
       </ScrollArea>
       <div className="p-4 border-t">
         <form onSubmit={handleSendMessage}>

@@ -24,7 +24,7 @@ defmodule Ws.MixProject do
     [
       {:cowboy, "~> 2.9"},
       {:plug_cowboy, "~> 2.5"},
-      {:jason, "~> 1.4"}
+      {:jason, "~> 1.4"},
     ]
   end
 end

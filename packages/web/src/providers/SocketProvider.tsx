@@ -14,17 +14,13 @@ import useWebSocket, { ReadyState } from "react-use-websocket";
 // Define WebSocket message types
 type WebSocketMessage =
   | { op: "register"; user: any }
-  | { op: "join_guild"; guild_id: string }
-  | { op: "enter_guild"; guild_id: string }
-  | { op: "leave_guild"; guild_id: string }
-  | { op: "create_room"; room_id: string }
-  | { op: "join_room"; room_id: string }
-  | { op: "leave_room"; room_id: string }
-  | { op: "send_dm"; to_user_id: string; message: string }
-  | { op: "send_global"; message: string }
   | { op: "friend_request"; to_user_id: string }
   | { op: "decline_friend_request"; to_user_id: string }
   | { op: "accept_friend_request"; to_user_id: string }
+  | { op: "guild_destroyed"; guild_id: string }
+  | { op: "chat_message"; guild_id: string; content: string }
+  | { op: "join_guild"; guild_id: string }
+  | { op: "leave_guild"; guild_id: string }
   | { op: "ping" };
 
 type SocketContextType = {

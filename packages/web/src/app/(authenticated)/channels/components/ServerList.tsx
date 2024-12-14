@@ -88,16 +88,16 @@ export default function ServerList() {
   const handleGuildClick = async (guildId: string) => {
     if (socket && socket.isConnected) {
       // First leave current guild if we're in one
-      if (currentGuildId) {
-        socket.sendMessage({
-          op: "leave_guild",
-          guild_id: currentGuildId,
-        });
-      }
+      // if (currentGuildId) {
+      //   socket.sendMessage({
+      //     op: "leave_guild",
+      //     guild_id: guildId,
+      //   });
+      // }
 
       // Then join the new guild
       socket.sendMessage({
-        op: "enter_guild",
+        op: "join_guild",
         guild_id: guildId,
       });
     } else {

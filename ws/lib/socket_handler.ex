@@ -50,6 +50,7 @@ defmodule WS.SocketHandler do
 
   def websocket_init(state) do
     Process.put(:"$callers", state.callers)
+
     {:ok, state}
   end
 
@@ -158,16 +159,31 @@ defmodule WS.SocketHandler do
         end
 
       {:ok, %{"op" => "join_guild", "guild_id" => guild_id}} ->
-        Logger.debug("Processing join_guild operation")
+        Logger.debug("Processing join_guild operation #{inspect(guild_id)}")
         case state.user do
           nil ->
             Logger.warn("Join guild attempt without registration")
             response = %{"status" => "error", "message" => "You must register first"}
             remote_send_impl(response, state)
           %WS.User{id: user_id} ->
-            WS.Guild.join_guild(guild_id, user_id)
-            response = %{"status" => "success", "message" => "Joined guild"}
-            remote_send_impl(response, state)
+            case WS.Guild.register_guild(guild_id: guild_id) do
+              {:ok, pid} ->
+                # Proceed with joining the guild
+                case WS.Guild.join_guild(guild_id, user_id) do
+                  :ok ->
+                    response = %{"status" => "success", "message" => "Joined guild"}
+                    remote_send_impl(response, state)
+                  {:error, reason} ->
+                    Logger.error("Failed to join guild: #{inspect(reason)}")
+                    response = %{"status" => "error", "message" => "Failed to join guild"}
+                    remote_send_impl(response, state)
+                end
+
+              {:error, reason} ->
+                Logger.error("Failed to register guild: #{inspect(reason)}")
+                response = %{"status" => "error", "message" => "Failed to register guild"}
+                remote_send_impl(response, state)
+            end
         end
 
       {:ok, %{"op" => "leave_guild", "guild_id" => guild_id}} ->
@@ -204,7 +220,11 @@ defmodule WS.SocketHandler do
             response = %{"status" => "error", "message" => "You must register first"}
             remote_send_impl(response, state)
           %WS.User{id: user_id} ->
-            WS.Chat.send_message(guild_id, [user_id, content])
+            WS.Chat.send_message(guild_id, %{
+              "type" => "message_received",
+              "content" => content
+            })
+
             response = %{"status" => "success", "message" => "Message sent"}
             remote_send_impl(response, state)
         end
@@ -283,6 +303,10 @@ defmodule WS.SocketHandler do
     Logger.debug("INFO: Handling remote_send broadcast from #{inspect(payload)}")
 
     remote_send_impl(payload, state)
+  end
+
+  def websocket_info({:pubsub, topic, message}, state) do
+    {:reply, {:text, "Message received from #{topic}: #{inspect(message)}"}, state}
   end
 
   def websocket_info(_, state) do

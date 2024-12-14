@@ -21,11 +21,15 @@ defmodule WS.Chat do
   defp cast(user_id, params), do: GenServer.cast(via_tuple(user_id), params)
   defp call(user_id, params), do: GenServer.call(via_tuple(user_id), params)
 
-  def register_chat(initial_values) do
-    callers = [self() | Process.get(:"$callers", [])]
-    guild_id = Keyword.get(initial_values, :guild_id)
+  def register_chat(initial_values) when is_list(initial_values) do
+    register_chat(Map.new(initial_values))
+  end
 
-    case DynamicSupervisor.start_child(WS.ChatSupervisor, {__MODULE__, Keyword.merge(initial_values, callers: callers)}) do
+  def register_chat(initial_values) when is_map(initial_values) do
+    callers = [self() | Process.get(:"$callers", [])]
+    guild_id = Map.get(initial_values, :guild_id)
+
+    case DynamicSupervisor.start_child(WS.ChatSupervisor, {__MODULE__, Map.merge(initial_values, %{callers: callers})}) do
       {:ok, pid} ->
         # ensures that the chat dies alongside the guild
         Process.link(pid)
@@ -42,7 +46,8 @@ defmodule WS.Chat do
     end
   end
 
-  def child_spec(init), do: %{super(init) | id: Keyword.get(init, :guild_id)}
+  def child_spec(init) when is_list(init), do: child_spec(Map.new(init))
+  def child_spec(init) when is_map(init), do: %{super(init) | id: Map.get(init, :guild_id)}
 
   def count, do: Registry.count(WS.ChatRegistry)
 
@@ -60,15 +65,18 @@ defmodule WS.Chat do
   ## BOILERPLATE
   ########################################################################
 
-  def start_link(init) do
-    GenServer.start_link(__MODULE__, init, name: via_tuple(init[:guild_id]))
+  def start_link(init) when is_list(init), do: start_link(Map.new(init))
+  def start_link(init) when is_map(init) do
+    GenServer.start_link(__MODULE__, init, name: via_tuple(Map.get(init, :guild_id)))
   end
 
   @impl true
-  def init(state) do
+  def init(state) when is_list(state), do: init(Map.new(state))
+  def init(state) when is_map(state) do
     Logger.info("Initializing chat with state: #{inspect(state)}")
+    state = struct(State, state)
     log_state_change("Initial state", state)
-    {:ok, struct(State, state)}
+    {:ok, state}
   end
 
   def kill(guild_id) do
@@ -105,22 +113,15 @@ defmodule WS.Chat do
     {:noreply, %{state | user_ids: Enum.reject(state.user_ids, &(&1 == user_id))}}
   end
 
-  def send_message(guild_id, [from_user, content]) do
-    cast(guild_id, {:send_message, [from_user, content]})
+  def send_message(guild_id, payload) do
+    cast(guild_id, {:send_message, payload})
   end
 
-  defp send_message_impl([from_user, content], state) do
-    message = %{
-      "op" => "message",
-      "guild_id" => state.guild_id,
-      "from_user" => from_user,
-      "content" => content,
-      "timestamp" => DateTime.utc_now()
-    }
-
+  defp send_message_impl(state, payload) do
+    Logger.debug("Sending message to guild: #{inspect(payload)}")
     # Send to all users in guild
     Enum.each(state.user_ids, fn user_id ->
-      WS.UserSession.send_ws(user_id, message)
+      WS.UserSession.send_ws(user_id, payload)
     end)
 
     {:noreply, state}
@@ -130,7 +131,7 @@ defmodule WS.Chat do
   ## ROUTER
   ########################################################################
 
-  def handle_cast({:send_message, [from_user, content]}, state), do: send_message_impl([from_user, content], state)
+  def handle_cast({:send_message, payload}, state), do: send_message_impl(state, payload)
   def handle_cast({:add_user, user_id}, state), do: add_user_impl(user_id, state)
   def handle_cast({:remove_user, user_id}, state), do: remove_user_impl(user_id, state)
 end

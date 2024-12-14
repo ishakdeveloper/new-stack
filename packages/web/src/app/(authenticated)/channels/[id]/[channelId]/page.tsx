@@ -26,7 +26,7 @@ export default function ChannelPage({
   useEffect(() => {
     if (socket) {
       socket.sendMessage({
-        op: "enter_guild",
+        op: "join_guild",
         guild_id: getCurrentGuildId ?? "",
       });
     }
