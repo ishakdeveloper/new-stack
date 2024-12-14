@@ -19,8 +19,19 @@ type WebSocketMessage =
   | { op: "accept_friend_request"; to_user_id: string }
   | { op: "guild_destroyed"; guild_id: string }
   | { op: "chat_message"; guild_id: string; content: string }
+  | { op: "delete_message"; guild_id: string; message_id: string }
+  | {
+      op: "update_message";
+      guild_id: string;
+      message_id: string;
+      content: string;
+    }
   | { op: "join_guild"; guild_id: string }
   | { op: "leave_guild"; guild_id: string }
+  | { op: "user_joined_guild"; guild_id: string }
+  | { op: "user_left_guild"; guild_id: string }
+  | { op: "create_category"; guild_id: string; name: string }
+  | { op: "delete_category"; guild_id: string; category_id: string }
   | { op: "ping" };
 
 type SocketContextType = {

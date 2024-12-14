@@ -75,6 +75,12 @@ export default function ServerList() {
         // Filter out the guild object with the matching guildId
         return oldData.filter((entry: any) => entry.guilds?.id !== guildId);
       });
+
+      socket.sendMessage({
+        op: "user_left_guild",
+        guild_id: guildId,
+      });
+
       // Redirect to "Home" after leaving
       router.push("/channels/me");
     },
@@ -88,12 +94,12 @@ export default function ServerList() {
   const handleGuildClick = async (guildId: string) => {
     if (socket && socket.isConnected) {
       // First leave current guild if we're in one
-      // if (currentGuildId) {
-      //   socket.sendMessage({
-      //     op: "leave_guild",
-      //     guild_id: guildId,
-      //   });
-      // }
+      if (currentGuildId) {
+        socket.sendMessage({
+          op: "leave_guild",
+          guild_id: guildId,
+        });
+      }
 
       // Then join the new guild
       socket.sendMessage({

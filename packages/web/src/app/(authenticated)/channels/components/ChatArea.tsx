@@ -111,7 +111,11 @@ const ChatArea = () => {
 
         const data = JSON.parse(lastMessage.data);
 
-        if (data.type === "message_received") {
+        if (
+          data.type === "message_received" ||
+          data.type === "user_joined_guild" ||
+          data.type === "user_left_guild"
+        ) {
           queryClient.invalidateQueries({
             queryKey: ["messages", currentChannelId],
           });
@@ -139,32 +143,47 @@ const ChatArea = () => {
       </div>
       <ScrollArea className="flex-grow p-4">
         <div className="flex flex-col-reverse">
-          {messages?.data?.map((message) => (
-            <div
-              key={message.id}
-              className="mb-4 group hover:bg-accent hover:rounded-md p-2 relative"
-            >
-              <div className="flex items-center mb-1">
-                <Popover
-                  open={
-                    userProfileOpen && selectedUser?.id === message.author?.id
-                  }
-                  onOpenChange={(open) => {
-                    setUserProfileOpen(open);
-                    if (!open) setSelectedUser(null);
-                  }}
-                >
-                  <PopoverTrigger asChild>
-                    <div onClick={() => handleUserClick(message.author)}>
-                      <Avatar className="h-8 w-8 mr-2 cursor-pointer hover:opacity-80">
-                        <AvatarFallback>
-                          {message.author?.name[0]}
-                        </AvatarFallback>
-                      </Avatar>
-                    </div>
-                  </PopoverTrigger>
-                  <UserProfilePopup
-                    userId={message.author?.id ?? ""}
+          {messages?.data?.map((message) =>
+            message.isSystem ? (
+              <div key={message.id} className="mb-4">
+                <div className="flex items-center mb-1">
+                  <div className="font-semibold">System</div>
+                  <div className="text-muted-foreground text-xs ml-2">
+                    {(() => {
+                      const date = new Date(message.createdAt);
+                      const today = new Date();
+                      const yesterday = new Date();
+                      yesterday.setDate(today.getDate() - 1);
+
+                      if (date.toDateString() === today.toDateString()) {
+                        return `Today ${date.toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}`;
+                      } else if (
+                        date.toDateString() === yesterday.toDateString()
+                      ) {
+                        return `Yesterday ${date.toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}`;
+                      } else {
+                        return date.toLocaleDateString();
+                      }
+                    })()}
+                  </div>
+                </div>
+                <div className="text-muted-foreground text-sm ml-10">
+                  {message.content}
+                </div>
+              </div>
+            ) : (
+              <div
+                key={message.id}
+                className="mb-4 group hover:bg-accent hover:rounded-md p-2 relative"
+              >
+                <div className="flex items-center mb-1">
+                  <Popover
                     open={
                       userProfileOpen && selectedUser?.id === message.author?.id
                     }
@@ -172,66 +191,87 @@ const ChatArea = () => {
                       setUserProfileOpen(open);
                       if (!open) setSelectedUser(null);
                     }}
-                  />
-                </Popover>
-                <div
-                  className="font-semibold cursor-pointer hover:underline"
-                  onClick={() => handleUserClick(message.author)}
-                >
-                  {message.author?.name}
-                </div>
-                <div className="text-muted-foreground text-xs ml-2">
-                  {(() => {
-                    const date = new Date(message.createdAt);
-                    const today = new Date();
-                    const yesterday = new Date();
-                    yesterday.setDate(today.getDate() - 1);
+                  >
+                    <PopoverTrigger asChild>
+                      <div onClick={() => handleUserClick(message.author)}>
+                        <Avatar className="h-8 w-8 mr-2 cursor-pointer hover:opacity-80">
+                          <AvatarFallback>
+                            {message.author?.name[0]}
+                          </AvatarFallback>
+                        </Avatar>
+                      </div>
+                    </PopoverTrigger>
+                    <UserProfilePopup
+                      userId={message.author?.id ?? ""}
+                      open={
+                        userProfileOpen &&
+                        selectedUser?.id === message.author?.id
+                      }
+                      onOpenChange={(open) => {
+                        setUserProfileOpen(open);
+                        if (!open) setSelectedUser(null);
+                      }}
+                    />
+                  </Popover>
+                  <div
+                    className="font-semibold cursor-pointer hover:underline"
+                    onClick={() => handleUserClick(message.author)}
+                  >
+                    {message.author?.name}
+                  </div>
+                  <div className="text-muted-foreground text-xs ml-2">
+                    {(() => {
+                      const date = new Date(message.createdAt);
+                      const today = new Date();
+                      const yesterday = new Date();
+                      yesterday.setDate(today.getDate() - 1);
 
-                    if (date.toDateString() === today.toDateString()) {
-                      return `Today ${date.toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}`;
-                    } else if (
-                      date.toDateString() === yesterday.toDateString()
-                    ) {
-                      return `Yesterday ${date.toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}`;
-                    } else {
-                      return (
-                        date.toLocaleDateString() +
-                        " " +
-                        date.toLocaleTimeString([], {
+                      if (date.toDateString() === today.toDateString()) {
+                        return `Today ${date.toLocaleTimeString([], {
                           hour: "2-digit",
                           minute: "2-digit",
-                        })
-                      );
-                    }
-                  })()}
-                </div>
-                {message.author?.id === currentUser?.id && (
-                  <div className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon">
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem>Edit Message</DropdownMenuItem>
-                        <DropdownMenuItem className="text-destructive">
-                          Delete Message
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                        })}`;
+                      } else if (
+                        date.toDateString() === yesterday.toDateString()
+                      ) {
+                        return `Yesterday ${date.toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}`;
+                      } else {
+                        return (
+                          date.toLocaleDateString() +
+                          " " +
+                          date.toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
+                        );
+                      }
+                    })()}
                   </div>
-                )}
+                  {message.author?.id === currentUser?.id && (
+                    <div className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem>Edit Message</DropdownMenuItem>
+                          <DropdownMenuItem className="text-destructive">
+                            Delete Message
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  )}
+                </div>
+                <div className="ml-10">{message.content}</div>
               </div>
-              <div className="ml-10">{message.content}</div>
-            </div>
-          ))}
+            )
+          )}
         </div>
         <div ref={scrollAreaRef}></div>
       </ScrollArea>
