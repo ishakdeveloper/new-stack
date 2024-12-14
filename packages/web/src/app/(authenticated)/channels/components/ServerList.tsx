@@ -14,20 +14,8 @@ import Link from "next/link";
 import { Separator } from "@/components/ui/separator";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { client } from "@/utils/client";
-import { authClient } from "@/utils/authClient";
 import { useGuildStore } from "@/stores/useGuildStore";
 import { useRouter } from "next/navigation";
-import {
-  Dialog,
-  DialogDescription,
-  DialogTitle,
-  DialogContent,
-  DialogTrigger,
-  DialogHeader,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
 import { CreateGuildModal } from "./CreateGuildModal";
 import { useUserStore } from "@/stores/useUserStore";
 import {

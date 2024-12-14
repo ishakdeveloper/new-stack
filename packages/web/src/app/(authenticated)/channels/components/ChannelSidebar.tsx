@@ -44,6 +44,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { DeleteServerModal } from "./DeleteServerModal";
 import { Switch } from "@/components/ui/switch";
+import { useSocket } from "@/providers/SocketProvider";
 
 const ChannelSidebar = () => {
   const router = useRouter();
@@ -70,6 +71,8 @@ const ChannelSidebar = () => {
   const setLastVisitedChannel = useGuildStore(
     (state) => state.setLastVisitedChannel
   );
+
+  const { lastMessage, sendMessage } = useSocket();
 
   const { data: guild } = useQuery({
     queryKey: ["guild", currentGuildId],
@@ -121,6 +124,12 @@ const ChannelSidebar = () => {
       setIsCreateChannelOpen(false);
       setNewChannelName("");
       setSelectedCategoryId(null);
+
+      sendMessage({
+        op: "create_channel",
+        guild_id: currentGuildId ?? "",
+      });
+
       toast({
         title: "Channel Created",
         description: `Successfully created channel #${newChannelName}`,
@@ -139,6 +148,12 @@ const ChannelSidebar = () => {
       queryClient.invalidateQueries({ queryKey: ["channels", currentGuildId] });
       setIsCreateCategoryOpen(false);
       setNewCategoryName("");
+
+      sendMessage({
+        op: "create_category",
+        guild_id: currentGuildId ?? "",
+      });
+
       toast({
         title: "Category Created",
         description: `Successfully created category ${newCategoryName}`,
@@ -213,6 +228,35 @@ const ChannelSidebar = () => {
       }
     }
   };
+
+  useEffect(() => {
+    if (lastMessage) {
+      try {
+        if (lastMessage.data === "pong") {
+          return;
+        }
+
+        const data = JSON.parse(lastMessage.data);
+
+        console.log(data);
+
+        if (
+          [
+            "channel_created",
+            "channel_deleted",
+            "category_created",
+            "category_deleted",
+          ].includes(data.type)
+        ) {
+          queryClient.invalidateQueries({
+            queryKey: ["channels", currentGuildId],
+          });
+        }
+      } catch (error) {
+        console.error("Failed to parse message:", error);
+      }
+    }
+  }, [lastMessage]);
 
   return (
     <div className="w-60 border-r flex flex-col h-full">

@@ -1,1 +1,0 @@
-CREATE UNIQUE INDEX IF NOT EXISTS "unique_users_in_channel" ON "dm_channel_users" USING btree (LEAST("channelId", "userId"), GREATEST("channelId", "userId"));

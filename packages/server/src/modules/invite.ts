@@ -142,7 +142,7 @@ export const inviteRoutes = new Elysia()
         .limit(1)
         .then((results) => results[0].id),
       authorId: user?.id ?? "",
-      content: `${user?.id} joined the server`,
+      content: `${user?.name} joined the server`,
       isSystem: true,
     });
 

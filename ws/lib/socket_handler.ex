@@ -229,6 +229,79 @@ defmodule WS.SocketHandler do
             remote_send_impl(response, state)
         end
 
+      {:ok, %{"op" => "user_joined_guild", "guild_id" => guild_id}} ->
+        case state.user do
+          nil ->
+            Logger.warn("User joined guild attempt without registration")
+            response = %{"status" => "error", "message" => "You must register first"}
+            remote_send_impl(response, state)
+          %WS.User{id: user_id} ->
+            WS.Guild.broadcast_ws(guild_id, %{"type" => "user_joined_guild", "user_id" => user_id})
+
+            response = %{"status" => "success", "message" => "User joined guild"}
+            remote_send_impl(response, state)
+        end
+
+      {:ok, %{"op" => "user_left_guild", "guild_id" => guild_id}} ->
+        case state.user do
+          nil ->
+            Logger.warn("User left guild attempt without registration")
+            response = %{"status" => "error", "message" => "You must register first"}
+            remote_send_impl(response, state)
+          %WS.User{id: user_id} ->
+            WS.Guild.broadcast_ws(guild_id, %{"type" => "user_left_guild", "user_id" => user_id})
+            response = %{"status" => "success", "message" => "User left guild"}
+            remote_send_impl(response, state)
+        end
+
+      {:ok, %{"op" => "create_category", "guild_id" => guild_id}} ->
+        case state.user do
+          nil ->
+            Logger.warn("Create category attempt without registration")
+            response = %{"status" => "error", "message" => "You must register first"}
+            remote_send_impl(response, state)
+          %WS.User{id: user_id} ->
+            WS.Guild.broadcast_ws(guild_id, %{"type" => "category_created"})
+            response = %{"status" => "success", "message" => "Category created"}
+            remote_send_impl(response, state)
+        end
+
+      {:ok, %{"op" => "delete_category", "guild_id" => guild_id}} ->
+        case state.user do
+          nil ->
+            Logger.warn("Delete category attempt without registration")
+            response = %{"status" => "error", "message" => "You must register first"}
+            remote_send_impl(response, state)
+          %WS.User{id: user_id} ->
+            WS.Guild.broadcast_ws(guild_id, %{"type" => "category_deleted"})
+            response = %{"status" => "success", "message" => "Category deleted"}
+            remote_send_impl(response, state)
+        end
+
+      {:ok, %{"op" => "create_channel", "guild_id" => guild_id}} ->
+        case state.user do
+          nil ->
+            Logger.warn("Create channel attempt without registration")
+            response = %{"status" => "error", "message" => "You must register first"}
+            remote_send_impl(response, state)
+          %WS.User{id: user_id} ->
+            WS.Guild.broadcast_ws(guild_id, %{"type" => "channel_created"})
+            response = %{"status" => "success", "message" => "Channel created"}
+            remote_send_impl(response, state)
+        end
+
+      {:ok, %{"op" => "delete_channel", "guild_id" => guild_id}} ->
+        case state.user do
+          nil ->
+            Logger.warn("Delete channel attempt without registration")
+            response = %{"status" => "error", "message" => "You must register first"}
+            remote_send_impl(response, state)
+          %WS.User{id: user_id} ->
+            WS.Guild.broadcast_ws(guild_id, %{"type" => "channel_deleted"})
+            response = %{"status" => "success", "message" => "Channel deleted"}
+            remote_send_impl(response, state)
+        end
+
       # Default case for unknown operations
       {:ok, %{"op" => op}} ->
         Logger.warn("Unknown operation received: #{op}, state: #{inspect(state)}")

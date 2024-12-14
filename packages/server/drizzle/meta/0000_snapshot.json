@@ -1,5 +1,5 @@
 {
-  "id": "ebe60daf-b1a3-444e-8627-8bcfd1a3567e",
+  "id": "d8c7d7cd-0965-40e5-83ec-17e174979618",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -1056,6 +1056,13 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
+        },
+        "isSystem": {
+          "name": "isSystem",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
         },
         "attachments": {
           "name": "attachments",

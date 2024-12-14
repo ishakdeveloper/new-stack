@@ -8,6 +8,7 @@ import {
   ChannelSchema,
   guildInviteLinks,
   guilds,
+  messages,
 } from "../database/schema";
 import { guildMembers } from "../database/schema";
 import db from "../database/db";
@@ -180,6 +181,19 @@ export const guildRoutes = new Elysia()
           eq(guildMembers.userId, user?.id ?? "")
         )
       );
+
+    // Create a system message for user leaving
+    await db.insert(messages).values({
+      channelId: await db
+        .select()
+        .from(channels)
+        .where(and(eq(channels.guildId, guildId), eq(channels.name, "General")))
+        .limit(1)
+        .then((results) => results[0].id),
+      authorId: user?.id ?? "",
+      content: `${user?.name} left the server`,
+      isSystem: true,
+    });
 
     console.log("Rows deleted:", result.rowCount);
 

@@ -139,6 +139,7 @@ CREATE TABLE IF NOT EXISTS "messages" (
 	"dmChannelId" uuid,
 	"authorId" uuid NOT NULL,
 	"content" text,
+	"isSystem" boolean DEFAULT false NOT NULL,
 	"attachments" text[],
 	"createdAt" timestamp DEFAULT now() NOT NULL,
 	"updatedAt" timestamp DEFAULT now() NOT NULL
