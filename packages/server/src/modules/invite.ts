@@ -1,10 +1,12 @@
 import Elysia, { t } from "elysia";
 import db from "../database/db";
 import {
+  channels,
   guildInviteLinks,
   guildMembers,
   guilds,
   inviteLinkUsages,
+  messages,
 } from "../database/schema";
 import { userMiddleware } from "../middlewares/userMiddleware";
 import { and, eq } from "drizzle-orm";
@@ -124,6 +126,24 @@ export const inviteRoutes = new Elysia()
     await db.insert(guildMembers).values({
       guildId: invite.guildId,
       userId: user?.id ?? "",
+    });
+
+    // Create a system message for user joining
+    await db.insert(messages).values({
+      channelId: await db
+        .select()
+        .from(channels)
+        .where(
+          and(
+            eq(channels.guildId, invite.guildId),
+            eq(channels.name, "General")
+          )
+        )
+        .limit(1)
+        .then((results) => results[0].id),
+      authorId: user?.id ?? "",
+      content: `${user?.id} joined the server`,
+      isSystem: true,
     });
 
     // Track invite usage

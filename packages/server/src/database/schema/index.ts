@@ -208,6 +208,7 @@ export const messages = pgTable("messages", {
     .notNull()
     .references(() => user.id), // User who sent the message
   content: text("content"), // Message text
+  isSystem: boolean("isSystem").notNull().default(false), // True if the message is a system message
   attachments: text("attachments").array(), // Array of file URLs
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
