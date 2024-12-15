@@ -14,7 +14,7 @@ import { generateInviteCode } from "../lib/generateInviteCode";
 import { user } from "../database/schema/auth";
 
 export const inviteRoutes = new Elysia()
-  .derive(({ request }) => userMiddleware(request))
+  .derive((context) => userMiddleware(context))
   // Create an invite link
   .post(
     "/invites",

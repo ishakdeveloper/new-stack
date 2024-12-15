@@ -26,6 +26,7 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { useSocket } from "@/providers/SocketProvider";
+import { authClient } from "@/utils/authClient";
 
 const FriendsList = () => {
   const [activeTab, setActiveTab] = useState<
@@ -35,6 +36,7 @@ const FriendsList = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { sendMessage, lastMessage, isConnected } = useSocket(); // Use the useSocket hook
+  const session = authClient.useSession();
 
   // Queries for fetching data
   const { data: friends, isLoading: loadingFriends } = useQuery({
@@ -87,7 +89,9 @@ const FriendsList = () => {
               description: `${data.username} declined your friend request`,
             });
           } else if (data.type === "friend_request_accepted") {
-            queryClient.invalidateQueries({ queryKey: ["dms"] });
+            queryClient.invalidateQueries({
+              queryKey: ["conversations", session.data?.user?.id],
+            });
             toast({
               title: "Friend Request Accepted",
               description: `${data.username} accepted your friend request`,
@@ -131,7 +135,9 @@ const FriendsList = () => {
     onSuccess: (data, id) => {
       queryClient.invalidateQueries({ queryKey: ["pendingRequests"] });
       queryClient.invalidateQueries({ queryKey: ["friends"] });
-      queryClient.invalidateQueries({ queryKey: ["dms"] });
+      queryClient.invalidateQueries({
+        queryKey: ["conversations", session.data?.user?.id],
+      });
 
       toast({
         title: "Friend request accepted!",
@@ -140,7 +146,7 @@ const FriendsList = () => {
 
       sendMessage({
         op: "accept_friend_request",
-        to_user_id: data?.data?.friendship?.requesterId ?? "",
+        to_user_id: data?.data?.friendship.requesterId ?? "",
       });
     },
   });

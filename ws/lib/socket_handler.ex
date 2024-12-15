@@ -143,7 +143,7 @@ defmodule WS.SocketHandler do
         end
 
       {:ok, %{"op" => "accept_friend_request", "to_user_id" => to_user_id}} ->
-        Logger.debug("Processing accept_friend_request operation")
+        Logger.debug("Processing accept_friend_request operation to #{inspect(to_user_id)}")
 
         case state.user do
           nil ->
@@ -299,6 +299,22 @@ defmodule WS.SocketHandler do
           %WS.User{id: user_id} ->
             WS.Guild.broadcast_ws(guild_id, %{"type" => "channel_deleted"})
             response = %{"status" => "success", "message" => "Channel deleted"}
+            remote_send_impl(response, state)
+        end
+
+      {:ok, %{"op" => "send_private_message", "to_user_id" => to_user_id}} ->
+        Logger.debug("Processing send_private_message operation to #{inspect(to_user_id)}")
+        case state.user do
+          nil ->
+            Logger.warn("Send private message attempt without registration")
+            response = %{"status" => "error", "message" => "You must register first"}
+            remote_send_impl(response, state)
+          %WS.User{id: user_id} ->
+            WS.UserSession.send_ws(to_user_id, %{
+              "type" => "private_message_received",
+            })
+
+            response = %{"status" => "success", "message" => "Message sent"}
             remote_send_impl(response, state)
         end
 

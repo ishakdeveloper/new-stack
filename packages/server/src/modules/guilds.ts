@@ -17,7 +17,7 @@ import { user } from "../database/schema/auth";
 import { generateInviteCode } from "../lib/generateInviteCode";
 
 export const guildRoutes = new Elysia()
-  .derive(({ request }) => userMiddleware(request))
+  .derive((context) => userMiddleware(context))
   // Create a guild
   // Create a guild
   .post(

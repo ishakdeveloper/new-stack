@@ -107,44 +107,6 @@ export const ChannelCreateSchema = t.Omit(ChannelSchema, [
 ]);
 export type ChannelCreate = Static<typeof ChannelCreateSchema>;
 
-export const dmChannels = pgTable("dm_channels", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  name: text("name"), // Optional for group DMs
-  isGroup: boolean("isGroup").notNull().default(false), // True for group DMs
-  createdBy: uuid("createdBy")
-    .notNull()
-    .references(() => user.id), // Creator of the DM or group DM
-  createdAt: timestamp("createdAt").notNull().defaultNow(),
-});
-
-export const DMChannelSchema = createSelectSchema(dmChannels);
-export type DMChannel = Static<typeof DMChannelSchema>;
-export const DMChannelCreateSchema = t.Omit(DMChannelSchema, [
-  "id",
-  "createdAt",
-]);
-export type DMChannelCreate = Static<typeof DMChannelCreateSchema>;
-
-// DM Channel Users Table (Many-to-Many)
-export const dmChannelUsers = pgTable("dm_channel_users", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  channelId: uuid("channelId")
-    .notNull()
-    .references(() => dmChannels.id, { onDelete: "cascade" }), // DM/Group DM this user is part of
-  userId: uuid("userId")
-    .notNull()
-    .references(() => user.id), // User in the DM or group
-  joinedAt: timestamp("joinedAt").notNull().defaultNow(),
-});
-
-export const DMChannelUserSchema = createSelectSchema(dmChannelUsers);
-export type DMChannelUser = Static<typeof DMChannelUserSchema>;
-export const DMChannelUserCreateSchema = t.Omit(DMChannelUserSchema, [
-  "id",
-  "joinedAt",
-]);
-export type DMChannelUserCreate = Static<typeof DMChannelUserCreateSchema>;
-
 export const roles = pgTable("roles", {
   id: uuid("id").defaultRandom().primaryKey(),
   guildId: uuid("guildId")
@@ -185,21 +147,59 @@ export const FriendshipCreateSchema = t.Omit(FriendshipSchema, [
 ]);
 export type FriendshipCreate = Static<typeof FriendshipCreateSchema>;
 
+export const conversations = pgTable("conversations", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  isGroup: boolean("isGroup").notNull().default(false), // True if this is a group conversation
+  name: text("name"), // Optional name for group conversations
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+});
+
+export const ConversationSchema = createSelectSchema(conversations);
+export type Conversation = Static<typeof ConversationSchema>;
+export const ConversationCreateSchema = t.Omit(ConversationSchema, [
+  "id",
+  "createdAt",
+]);
+export type ConversationCreate = Static<typeof ConversationCreateSchema>;
+
+export const conversationParticipants = pgTable("conversation_participants", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  conversationId: uuid("conversationId")
+    .notNull()
+    .references(() => conversations.id, { onDelete: "cascade" }), // Links to conversation
+  userId: uuid("userId")
+    .notNull()
+    .references(() => user.id), // Links to participants
+  joinedAt: timestamp("joinedAt").notNull().defaultNow(), // Timestamp when the user joined the conversation
+});
+
 // Messages Table
 export const messages = pgTable("messages", {
   id: uuid("id").defaultRandom().primaryKey(),
+
+  conversationId: uuid("conversationId").references(() => conversations.id, {
+    onDelete: "cascade",
+  }),
+
+  // Channel-specific messages
   channelId: uuid("channelId").references(() => channels.id, {
     onDelete: "cascade",
-  }), // Reference for Guild messages
-  dmChannelId: uuid("dmChannelId").references(() => dmChannels.id, {
-    onDelete: "cascade",
-  }), // Reference for DM messages
+  }), // Reference to the channel
+
+  // Message sender
   authorId: uuid("authorId")
     .notNull()
     .references(() => user.id), // User who sent the message
+
+  // Content & Metadata
   content: text("content"), // Message text
   isSystem: boolean("isSystem").notNull().default(false), // True if the message is a system message
   attachments: text("attachments").array(), // Array of file URLs
+  isEdited: boolean("isEdited").notNull().default(false), // True if the message has been edited
+  tags: text("tags").array(), // Tags for users, @everyone, or @channel
+  // Direct message thread ID (either channelId or this field should be non-null, never both)
+
+  // Timestamps
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
 });
@@ -211,7 +211,11 @@ export const MessageCreateSchema = t.Omit(MessageSchema, [
   "createdAt",
   "updatedAt",
 ]);
-export type MessageCreate = Static<typeof MessageCreateSchema>;
+
+export type MessageCreate = Static<typeof MessageCreateSchema> & {
+  conversationId?: string; // Optional, used for direct messages only
+  channelId?: string; // Optional, used for guild messages only
+};
 
 export const guildInviteLinks = pgTable("guild_invite_links", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -293,8 +297,27 @@ export const inviteLinkUsagesRelations = relations(
   })
 );
 
+export const notifications = pgTable("notifications", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("userId")
+    .notNull()
+    .references(() => user.id), // The user receiving the notification
+  type: varchar("type", { length: 50 }).notNull(), // e.g., "friend_request", "tagged", "friend_request_declined"
+  data: text("data"), // JSON or additional data about the notification
+  isRead: boolean("isRead").notNull().default(false), // True if the user has read the notification
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+});
+
+export const NotificationSchema = createSelectSchema(notifications);
+export type Notification = Static<typeof NotificationSchema>;
+export const NotificationCreateSchema = t.Omit(NotificationSchema, [
+  "id",
+  "createdAt",
+]);
+export type NotificationCreate = Static<typeof NotificationCreateSchema>;
+
 // User Relationships
-export const userRelations = relations(user, ({ many, one }) => ({
+export const userRelations = relations(user, ({ many }) => ({
   guildMembers: many(guildMembers, {
     relationName: "userGuildMembers",
   }), // Users can join multiple guilds through this table
@@ -302,13 +325,44 @@ export const userRelations = relations(user, ({ many, one }) => ({
   messagesSent: many(messages, {
     relationName: "authoredMessages",
   }), // Messages the user has sent
-  dmChannels: many(dmChannelUsers, {
-    relationName: "dmChannelUsers",
-  }), // Direct Messages or Group DMs the user is a part of
   sentFriendRequests: many(friendships, { relationName: "sentFriendRequests" }),
   receivedFriendRequests: many(friendships, {
     relationName: "receivedFriendRequests",
   }),
+  conversations: many(conversationParticipants, {
+    relationName: "userConversations",
+  }),
+}));
+
+export const directMessageRelations = relations(messages, ({ one }) => ({
+  sender: one(user, {
+    fields: [messages.authorId],
+    references: [user.id],
+    relationName: "sentDirectMessages",
+  }), // User who sent the direct message
+  receiver: one(user, {
+    fields: [messages.authorId],
+    references: [user.id],
+    relationName: "receivedDirectMessages",
+  }), // User who received the direct message
+}));
+
+export const messagesRelations = relations(messages, ({ one }) => ({
+  channel: one(channels, {
+    fields: [messages.channelId],
+    references: [channels.id],
+    relationName: "channelMessages",
+  }), // Guild channel where the message was posted (optional)
+  conversation: one(conversations, {
+    fields: [messages.conversationId],
+    references: [conversations.id],
+    relationName: "conversationMessages",
+  }), // Direct message thread for private messages (optional)
+  author: one(user, {
+    fields: [messages.authorId],
+    references: [user.id],
+    relationName: "authoredMessages",
+  }), // The author of the message
 }));
 
 // Guild Relationships
@@ -347,11 +401,6 @@ export const guildMembersRelations = relations(guildMembers, ({ one }) => ({
     references: [user.id],
     relationName: "userGuildMembers",
   }), // Automatically connects via userId
-  role: one(roles, {
-    fields: [guildMembers.roleIds],
-    references: [roles.id],
-    relationName: "memberRoles",
-  }), // Automatically connects via roleId
 }));
 
 // Category Relationships
@@ -383,25 +432,6 @@ export const channelsRelations = relations(channels, ({ many, one }) => ({
   }), // Connects via channelId in messages
 }));
 
-// Messages Relationships
-export const messageRelations = relations(messages, ({ one }) => ({
-  sender: one(user, {
-    fields: [messages.authorId],
-    references: [user.id],
-    relationName: "authoredMessages",
-  }), // Automatically connects via senderId
-  channel: one(channels, {
-    fields: [messages.channelId],
-    references: [channels.id],
-    relationName: "channelMessages",
-  }), // For guild messages, connects via channelId
-  dmChannel: one(dmChannels, {
-    fields: [messages.dmChannelId],
-    references: [dmChannels.id],
-    relationName: "dmChannelMessages",
-  }), // For DM messages, connects via dmChannelId
-}));
-
 // Role Relationships
 export const roleRelations = relations(roles, ({ many, one }) => ({
   guild: one(guilds, {
@@ -412,4 +442,35 @@ export const roleRelations = relations(roles, ({ many, one }) => ({
   users: many(guildMembers, {
     relationName: "memberRoles",
   }), // Users assigned this role
+}));
+
+export const notificationRelations = relations(notifications, ({ one }) => ({
+  user: one(user, {
+    fields: [notifications.userId],
+    references: [user.id],
+    relationName: "userNotifications",
+  }),
+}));
+
+export const conversationParticipantsRelations = relations(
+  conversationParticipants,
+  ({ one }) => ({
+    conversation: one(conversations, {
+      fields: [conversationParticipants.conversationId],
+      references: [conversations.id],
+      relationName: "participants",
+    }),
+    user: one(user, {
+      fields: [conversationParticipants.userId],
+      references: [user.id],
+      relationName: "userConversations",
+    }),
+  })
+);
+
+export const conversationsRelations = relations(conversations, ({ many }) => ({
+  messages: many(messages, { relationName: "conversationMessages" }),
+  participants: many(conversationParticipants, {
+    relationName: "participants",
+  }),
 }));

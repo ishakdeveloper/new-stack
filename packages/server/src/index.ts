@@ -1,17 +1,8 @@
 import { Context, Elysia, t } from "elysia";
 import { cors } from "@elysiajs/cors";
 import swagger from "@elysiajs/swagger";
-import { opentelemetry } from "@elysiajs/opentelemetry";
-
-import { BatchSpanProcessor } from "@opentelemetry/sdk-trace-node";
-import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-proto";
-
 import { auth } from "./lib/auth";
 import { authRoutes } from "./modules/auth";
-import { ClientToServerEvents, ServerToClientEvents } from "./types";
-import db from "./database/db";
-
-import { logger, logWebSocket } from "@lenoux01/lean-logs";
 import { guildRoutes } from "./modules/guilds";
 import { inviteRoutes } from "./modules/invite";
 import { friendshipRoutes } from "./modules/friends";
@@ -21,8 +12,9 @@ import {
   guildChannelRoutes,
 } from "./modules/messages";
 import { channelRoutes } from "./modules/channels";
-import { dmRoutes } from "./modules/dm";
+import { conversationRoutes } from "./modules/conversations";
 import { userRoutes } from "./modules/user";
+import { notificationsRoutes } from "./modules/notifications";
 
 const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(",") || [];
 
@@ -63,7 +55,8 @@ export const app = new Elysia()
       .use(guildChannelRoutes)
       .use(groupDmRoutes)
       .use(channelRoutes)
-      .use(dmRoutes)
+      .use(conversationRoutes)
+      .use(notificationsRoutes)
   )
   .all("/api/auth/*", betterAuthView)
   .listen(4000);

@@ -1,15 +1,18 @@
-import { Elysia } from "elysia";
+import { Context, Elysia } from "elysia";
 import { auth, Session, User } from "../lib/auth";
 import { betterAuthView } from "..";
 
 // user middleware (compute user and session and pass to routes)
-export const userMiddleware = async (request: Request) => {
-  const session = await auth.api.getSession({ headers: request.headers });
+export const userMiddleware = async (context: Context) => {
+  const session = await auth.api.getSession({
+    headers: context.request.headers,
+  });
 
   if (!session) {
+    context.set.status = 401;
     return {
-      user: null,
-      session: null,
+      sucess: "error",
+      message: "Unauthorized",
     };
   }
 
@@ -18,11 +21,3 @@ export const userMiddleware = async (request: Request) => {
     session: session.session,
   };
 };
-
-export const isUserAuthenticated = new Elysia()
-  .derive(({ request }) => userMiddleware(request))
-  .onBeforeHandle(({ user }) => {
-    if (!user) {
-      throw new Error("Unauthorized");
-    }
-  });

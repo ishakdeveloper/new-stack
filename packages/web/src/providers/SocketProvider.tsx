@@ -30,9 +30,11 @@ type WebSocketMessage =
   | { op: "leave_guild"; guild_id: string }
   | { op: "user_joined_guild"; guild_id: string }
   | { op: "user_left_guild"; guild_id: string }
-  | { op: "create_category"; guild_id: string; name: string }
-  | { op: "delete_category"; guild_id: string; category_id: string }
-  | { op: "ping" };
+  | { op: "create_category"; guild_id: string }
+  | { op: "delete_category"; guild_id: string }
+  | { op: "create_channel"; guild_id: string }
+  | { op: "ping" }
+  | { op: "send_private_message"; to_user_id: string };
 
 type SocketContextType = {
   sendMessage: (message: WebSocketMessage) => void;
@@ -49,6 +51,7 @@ export const SocketProvider: React.FC<{
   const socketUrl = "ws://localhost:4001/ws";
   const [shouldConnect, setShouldConnect] = useState(false);
   const hasRegistered = useRef(false);
+  const wasConnected = useRef(false);
 
   const {
     sendMessage: sendRawMessage,
@@ -59,7 +62,10 @@ export const SocketProvider: React.FC<{
     reconnectInterval: 0, // Set to 0 for immediate reconnection
     retryOnError: true,
     onOpen: () => console.log("WebSocket connection opened"),
-    onClose: () => console.log("WebSocket connection closed"),
+    onClose: () => {
+      console.log("WebSocket connection closed");
+      hasRegistered.current = false;
+    },
     onError: (event) => console.error("WebSocket error:", event),
     share: true,
   });

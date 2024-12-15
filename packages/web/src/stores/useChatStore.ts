@@ -1,43 +1,52 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-interface Message {
+interface User {
   id: string;
-  content: string;
-  userId: string;
-  channelId: string;
-  createdAt: string;
+  name: string;
 }
 
 interface ChatStore {
-  messages: Record<string, Message[]>; // channelId -> messages
-  addMessage: (channelId: string, message: Message) => void;
-  setMessages: (channelId: string, messages: Message[]) => void;
-  clearMessages: (channelId: string) => void;
+  currentChatId: string | null;
+  setCurrentChatId: (chatId: string | null) => void;
+  participants: Record<string, User[]>; // chatId -> participants
+  setParticipants: (chatId: string, participants: User[]) => void;
+  oneOnOnePartner: Record<string, string>; // chatId -> other user id
+  setOneOnOnePartner: (chatId: string, user: string) => void;
+  clearChat: (chatId: string) => void;
 }
 
 export const useChatStore = create<ChatStore>()(
   persist(
     (set) => ({
-      messages: {},
-      addMessage: (channelId, message) =>
+      currentChatId: null,
+      setCurrentChatId: (chatId) => set({ currentChatId: chatId }),
+      participants: {},
+      setParticipants: (chatId, participants) =>
         set((state) => ({
-          messages: {
-            ...state.messages,
-            [channelId]: [...(state.messages[channelId] || []), message],
+          participants: {
+            ...state.participants,
+            [chatId]: participants,
           },
         })),
-      setMessages: (channelId, messages) =>
+      oneOnOnePartner: {},
+      setOneOnOnePartner: (chatId, user) =>
         set((state) => ({
-          messages: {
-            ...state.messages,
-            [channelId]: messages,
+          oneOnOnePartner: {
+            ...state.oneOnOnePartner,
+            [chatId]: user,
           },
         })),
-      clearMessages: (channelId) =>
+      clearChat: (chatId) =>
         set((state) => {
-          const { [channelId]: _, ...rest } = state.messages;
-          return { messages: rest };
+          const { [chatId]: _, ...remainingParticipants } = state.participants;
+          const { [chatId]: __, ...remainingPartners } = state.oneOnOnePartner;
+          return {
+            participants: remainingParticipants,
+            oneOnOnePartner: remainingPartners,
+            currentChatId:
+              state.currentChatId === chatId ? null : state.currentChatId,
+          };
         }),
     }),
     {

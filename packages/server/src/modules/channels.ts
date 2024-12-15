@@ -7,7 +7,7 @@ import db from "../database/db";
 import { generateChannelSlug } from "../lib/generateChannelSlug";
 
 export const channelRoutes = new Elysia()
-  .derive(({ request }) => userMiddleware(request))
+  .derive((context) => userMiddleware(context))
   // Get all categories and their channels for a guild
   .get(
     "/guilds/:guildId/channels",
