@@ -60,8 +60,8 @@ defmodule WS.Workers.Channel do
 
   def child_spec(init), do: %{super(init) | id: Map.get(init, :channel_id)}
 
-  def count, do: Registry.count(WS.ChannelRegistry)
-  def lookup(channel_id), do: Registry.lookup(WS.ChannelRegistry, channel_id)
+  def count, do: Registry.count(WS.Workers.ChannelRegistry)
+  def lookup(channel_id), do: Registry.lookup(WS.Workers.ChannelRegistry, channel_id)
 
   def start_link(init) do
     GenServer.start_link(__MODULE__, init, name: via_tuple(init[:channel_id]))

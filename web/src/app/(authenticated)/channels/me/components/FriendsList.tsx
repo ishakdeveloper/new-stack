@@ -42,14 +42,14 @@ const FriendsList = () => {
   const setOneOnOnePartner = useChatStore((state) => state.setOneOnOnePartner);
   // Queries for fetching data
   const { data: friends, isLoading: loadingFriends } = useQuery({
-    queryKey: ["friends", session.data?.user?.id],
+    queryKey: ["friends"],
     queryFn: () => {
       const data = client.api.friendships.get();
       return data;
     },
   });
   const { data: pendingRequests, isLoading: loadingRequests } = useQuery({
-    queryKey: ["pendingRequests", session.data?.user?.id],
+    queryKey: ["pendingRequests"],
     queryFn: () => {
       const data = client.api.friendships.pending.get();
       return data;
@@ -67,10 +67,10 @@ const FriendsList = () => {
         ) {
           console.log("data", lastMessage.data);
           queryClient.invalidateQueries({
-            queryKey: ["pendingRequests", session.data?.user?.id],
+            queryKey: ["pendingRequests"],
           });
           queryClient.invalidateQueries({
-            queryKey: ["friends", session.data?.user?.id],
+            queryKey: ["friends"],
           });
 
           if (lastMessage.data.type === "friend_request") {
@@ -85,7 +85,7 @@ const FriendsList = () => {
             });
           } else if (lastMessage.data.type === "friend_request_accepted") {
             queryClient.invalidateQueries({
-              queryKey: ["conversations", session.data?.user?.id],
+              queryKey: ["conversations"],
             });
             toast({
               title: "Friend Request Accepted",
@@ -106,7 +106,7 @@ const FriendsList = () => {
     onSuccess: (data) => {
       console.log("data", data);
       queryClient.invalidateQueries({
-        queryKey: ["pendingRequests", session.data?.user?.id],
+        queryKey: ["pendingRequests"],
       }); // Refresh pending requests
       toast({
         title: "Friend request sent!",
@@ -131,13 +131,13 @@ const FriendsList = () => {
     mutationFn: (id: string) => client.api.friendships({ id }).accept.patch(),
     onSuccess: (data, id) => {
       queryClient.invalidateQueries({
-        queryKey: ["pendingRequests", session.data?.user?.id],
+        queryKey: ["pendingRequests"],
       });
       queryClient.invalidateQueries({
-        queryKey: ["friends", session.data?.user?.id],
+        queryKey: ["friends"],
       });
       queryClient.invalidateQueries({
-        queryKey: ["conversations", session.data?.user?.id],
+        queryKey: ["conversations"],
       });
 
       toast({
@@ -156,10 +156,10 @@ const FriendsList = () => {
     mutationFn: (id: string) => client.api.friendships({ id }).decline.patch(),
     onSuccess: (data, id) => {
       queryClient.invalidateQueries({
-        queryKey: ["pendingRequests", session.data?.user?.id],
+        queryKey: ["pendingRequests"],
       });
       queryClient.invalidateQueries({
-        queryKey: ["friends", session.data?.user?.id],
+        queryKey: ["friends"],
       });
       toast({
         title: "Friend request declined!",
@@ -178,7 +178,7 @@ const FriendsList = () => {
       client.api.friendships({ id: friendshipId }).delete(),
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ["friends", session.data?.user?.id],
+        queryKey: ["friends"],
       });
       toast({
         title: "Friend removed!",

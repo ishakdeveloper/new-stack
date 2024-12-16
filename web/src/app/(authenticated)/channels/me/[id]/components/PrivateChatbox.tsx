@@ -71,10 +71,17 @@ const PrivateChatbox = ({ slug }: { slug: string }) => {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["messages", currentChatId] });
 
-      sendSocketMessage({
-        op: "send_private_message",
-        to_user_id: oneOnOnePartner[currentChatId ?? ""] ?? "",
-      });
+      if (conversation?.isGroup) {
+        sendSocketMessage({
+          op: "send_group_message",
+          group_id: currentChatId ?? "",
+        });
+      } else {
+        sendSocketMessage({
+          op: "send_private_message",
+          to_user_id: oneOnOnePartner[currentChatId ?? ""] ?? "",
+        });
+      }
     },
   });
 
@@ -91,7 +98,10 @@ const PrivateChatbox = ({ slug }: { slug: string }) => {
   useEffect(() => {
     if (lastMessage) {
       try {
-        if (lastMessage.data.type === "private_message_received") {
+        if (
+          lastMessage.data.type === "private_message_received" ||
+          lastMessage.data.type === "group_message_received"
+        ) {
           queryClient.invalidateQueries({
             queryKey: ["messages", currentChatId],
           });

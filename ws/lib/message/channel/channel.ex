@@ -54,7 +54,7 @@ defmodule WS.Message.Channel do
         response = %{"status" => "error", "message" => "You must register first"}
         {:reply, {:ok, response}, state}
       %WS.User{id: user_id} ->
-        WS.Channel.start_channel(group_id, user_ids)
+        Channel.start_channel(group_id, user_ids)
         response = %{"status" => "success", "message" => "Group created"}
         {:reply, {:ok, response}, state}
     end
@@ -68,26 +68,8 @@ defmodule WS.Message.Channel do
         response = %{"status" => "error", "message" => "You must register first"}
         {:reply, {:ok, response}, state}
       %WS.User{id: user_id} ->
-        WS.Channel.broadcast_ws(group_id, %{"type" => "user_joined_group", "user_id" => user_id})
+        Channel.broadcast_ws(group_id, %{"type" => "user_joined_group", "user_id" => user_id})
         response = %{"status" => "success", "message" => "Joined group"}
-        {:reply, {:ok, response}, state}
-    end
-  end
-
-  def send_group_message(%{"group_id" => group_id, "message" => message}, state) do
-    Logger.debug("Processing send_group_message operation")
-    case state.user do
-      nil ->
-        Logger.warn("Send group message attempt without registration")
-        response = %{"status" => "error", "message" => "You must register first"}
-        {:reply, {:ok, response}, state}
-      %WS.User{id: user_id} ->
-        WS.Channel.broadcast_ws(group_id, %{
-          "type" => "group_message_received",
-          "message" => message,
-          "sender_id" => user_id
-        })
-        response = %{"status" => "success", "message" => "Message sent"}
         {:reply, {:ok, response}, state}
     end
   end
@@ -100,7 +82,7 @@ defmodule WS.Message.Channel do
         response = %{"status" => "error", "message" => "You must register first"}
         {:reply, {:ok, response}, state}
       %WS.User{id: user_id} ->
-        WS.Channel.remove_user(group_id, user_id)
+        Channel.remove_user(group_id, user_id)
         response = %{"status" => "success", "message" => "Left group"}
         {:reply, {:ok, response}, state}
     end

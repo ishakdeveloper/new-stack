@@ -38,6 +38,7 @@ type WebSocketMessage =
   | { op: "delete_channel"; guild_id: string }
   | { op: "ping" }
   | { op: "send_private_message"; to_user_id: string }
+  | { op: "send_group_message"; group_id: string }
   | { op: "create_group"; group_id: string; user_ids: string[] };
 
 type SocketContextType = {

@@ -17,6 +17,7 @@ defmodule WS.Message do
       # Chat related
       def handler("chat_message", data, state), do: WS.Message.Chat.send_message(data, state)
       def handler("send_private_message", data, state), do: WS.Message.Chat.send_private_message(data, state)
+      def handler("send_group_message", data, state), do: WS.Message.Chat.send_group_message(data, state)
 
       # Category related
       def handler("create_category", data, state), do: WS.Message.Guilds.Categories.create_category(data, state)
@@ -34,7 +35,6 @@ defmodule WS.Message do
       def handler("delete_group", data, state), do: WS.Message.Channel.delete_group(data, state)
       def handler("join_group", data, state), do: WS.Message.Channel.join_group(data, state)
       def handler("leave_group", data, state), do: WS.Message.Channel.leave_group(data, state)
-      def handler("send_group_message", data, state), do: WS.Message.Channel.send_group_message(data, state)
 
       # Heartbeat / health check
       def handler("ping", data, state), do: {:reply, {:ok, "pong"}, state}
