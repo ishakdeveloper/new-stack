@@ -16,6 +16,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useRouter } from "next/navigation";
+import { SettingsOverlay } from "@/app/components/SettingsOverlay";
 
 export default function LoggedInUserBox() {
   const currentUser = useUserStore((state) => state.currentUser);
@@ -40,11 +41,11 @@ export default function LoggedInUserBox() {
         <AvatarFallback>{currentUser?.name?.[0] ?? "U"}</AvatarFallback>
       </Avatar>
       <span className="ml-2 text-sm">{currentUser?.name}</span>
+      <SettingsOverlay />
+
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" className="ml-auto">
-            <Settings className="h-4 w-4" />
-          </Button>
+          <Button variant="ghost" size="icon" className="ml-auto"></Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuItem asChild>

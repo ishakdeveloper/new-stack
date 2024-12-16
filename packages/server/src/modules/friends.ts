@@ -1,12 +1,13 @@
 import { Elysia, t } from "elysia";
 import { userMiddleware } from "../middlewares/userMiddleware";
-import { dmChannelUsers, dmChannels, friendships } from "../database/schema";
 import db from "../database/db";
 import { user as UserTable } from "../database/schema/auth";
 import { and, eq, or, sql } from "drizzle-orm";
+import { friendships } from "../database/schema";
+import { conversations, conversationParticipants } from "../database/schema";
 
 export const friendshipRoutes = new Elysia()
-  .derive(({ request }) => userMiddleware(request))
+  .derive((context) => userMiddleware(context))
   // Send a friend request
   .post(
     "/friendships",
@@ -87,7 +88,7 @@ export const friendshipRoutes = new Elysia()
       throw new Error("Friend request not found.");
     }
 
-    const { addresseeId } = existingRequest[0];
+    const { requesterId, addresseeId } = existingRequest[0];
     const loggedInUserId = user?.id ?? "";
 
     // Ensure the logged-in user is the addressee
@@ -103,6 +104,67 @@ export const friendshipRoutes = new Elysia()
       })
       .where(eq(friendships.id, id))
       .returning();
+
+    // First, check for an existing conversation with exactly these two participants
+    const existingConversation = await db
+      .select({
+        id: conversations.id,
+      })
+      .from(conversations)
+      .where(
+        and(
+          eq(conversations.isGroup, false),
+          sql`(
+            SELECT COUNT(DISTINCT cp."userId")
+            FROM ${conversationParticipants} cp
+            WHERE cp."conversationId" = ${conversations.id}
+          ) = 2`,
+          sql`EXISTS (
+            SELECT 1
+            FROM ${conversationParticipants} cp
+            WHERE cp."conversationId" = ${conversations.id}
+            AND cp."userId" = ${requesterId}
+          )`,
+          sql`EXISTS (
+            SELECT 1
+            FROM ${conversationParticipants} cp
+            WHERE cp."conversationId" = ${conversations.id}
+            AND cp."userId" = ${addresseeId}
+          )`
+        )
+      )
+      .limit(1);
+
+    let conversation;
+
+    if (existingConversation.length === 0) {
+      // Begin a transaction to ensure atomicity
+      await db.transaction(async (tx) => {
+        // Create a new conversation
+        const [newConversation] = await tx
+          .insert(conversations)
+          .values({
+            isGroup: false,
+          })
+          .returning();
+
+        // Add exactly two participants
+        await tx.insert(conversationParticipants).values([
+          {
+            conversationId: newConversation.id,
+            userId: requesterId,
+          },
+          {
+            conversationId: newConversation.id,
+            userId: addresseeId,
+          },
+        ]);
+
+        conversation = newConversation;
+      });
+    } else {
+      conversation = existingConversation[0];
+    }
 
     return {
       message: "Friendship accepted.",
@@ -188,11 +250,32 @@ export const friendshipRoutes = new Elysia()
     // Fetch accepted friendships involving the current user
     const friendshipsData = await db
       .select({
-        friendshipId: friendships.id, // Add friendshipId to the selection
+        friendshipId: friendships.id,
         friendId: sql`CASE
            WHEN ${friendships.requesterId} = ${user.id} THEN ${friendships.addresseeId}
            ELSE ${friendships.requesterId}
          END`.as("friendId"),
+        conversationId: sql`(
+          SELECT cp."conversationId"
+          FROM ${conversationParticipants} cp
+          WHERE cp."userId" = ${user.id}
+          AND EXISTS (
+            SELECT 1 
+            FROM ${conversationParticipants} cp2
+            WHERE cp2."conversationId" = cp."conversationId"
+            AND cp2."userId" = CASE
+              WHEN ${friendships.requesterId} = ${user.id} THEN ${friendships.addresseeId}
+              ELSE ${friendships.requesterId}
+            END
+          )
+          AND EXISTS (
+            SELECT 1
+            FROM ${conversations} c
+            WHERE c.id = cp."conversationId"
+            AND c."isGroup" = false
+          )
+          LIMIT 1
+        )`.as("conversationId"),
       })
       .from(friendships)
       .where(
@@ -207,9 +290,10 @@ export const friendshipRoutes = new Elysia()
     }
 
     // Extract friend IDs and friendship IDs
-    const friendsWithIds = friendshipsData.map((f) => ({
-      friendshipId: f.friendshipId, // Include friendshipId
+    const friendIds = friendshipsData.map((f) => ({
+      friendshipId: f.friendshipId,
       friendId: f.friendId,
+      conversationId: f.conversationId,
     }));
 
     // Fetch user details for friends, including friendshipId
@@ -219,26 +303,23 @@ export const friendshipRoutes = new Elysia()
         name: UserTable.name,
         email: UserTable.email,
         image: UserTable.image,
-        friendshipId: sql`${sql.join(
-          friendsWithIds.map((item) => sql`${item.friendshipId}`),
-          sql`, `
-        )}`.as("friendshipId"), // Attach friendshipId here
       })
       .from(UserTable)
       .where(
         sql`${UserTable.id} IN (${sql.join(
-          friendsWithIds.map((item) => sql`${item.friendId}`),
+          friendIds.map((item) => sql`${item.friendId}`),
           sql`, `
         )})`
       );
 
-    // Attach the friendshipId to each friend
-    const friendsWithFriendshipId = friends.map((friend, index) => ({
+    // Attach the friendshipId and conversationId to each friend
+    const friendsWithDetails = friends.map((friend, index) => ({
       ...friend,
-      friendshipId: friendsWithIds[index].friendshipId, // Match friendshipId from previous query
+      friendshipId: friendIds[index].friendshipId,
+      conversationId: friendIds[index].conversationId,
     }));
 
-    return friendsWithFriendshipId;
+    return friendsWithDetails;
   })
 
   // Remove a friend

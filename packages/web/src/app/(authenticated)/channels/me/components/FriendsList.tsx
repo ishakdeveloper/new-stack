@@ -26,6 +26,8 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { useSocket } from "@/providers/SocketProvider";
+import { authClient } from "@/utils/authClient";
+import { useChatStore } from "@/stores/useChatStore";
 
 const FriendsList = () => {
   const [activeTab, setActiveTab] = useState<
@@ -35,17 +37,19 @@ const FriendsList = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { sendMessage, lastMessage, isConnected } = useSocket(); // Use the useSocket hook
-
+  const session = authClient.useSession();
+  const setCurrentChatId = useChatStore((state) => state.setCurrentChatId);
+  const setOneOnOnePartner = useChatStore((state) => state.setOneOnOnePartner);
   // Queries for fetching data
   const { data: friends, isLoading: loadingFriends } = useQuery({
-    queryKey: ["friends"],
+    queryKey: ["friends", session.data?.user?.id],
     queryFn: () => {
       const data = client.api.friendships.get();
       return data;
     },
   });
   const { data: pendingRequests, isLoading: loadingRequests } = useQuery({
-    queryKey: ["pendingRequests"],
+    queryKey: ["pendingRequests", session.data?.user?.id],
     queryFn: () => {
       const data = client.api.friendships.pending.get();
       return data;
@@ -55,42 +59,37 @@ const FriendsList = () => {
   useEffect(() => {
     if (lastMessage) {
       try {
-        // Check if the message is "pong", and handle it separately
-        if (lastMessage.data === "pong") {
-          // Handle heartbeat "pong" without parsing
-          return;
-        }
-
-        // console.log("lastMessage", lastMessage);
-
-        // Try to parse the message as JSON
-        const data = JSON.parse(lastMessage.data);
-
         // Handle the parsed data if it is a valid JSON message
         if (
-          data.type === "friend_request" ||
-          data.type === "friend_request_declined" ||
-          data.type === "friend_request_accepted"
+          lastMessage.data.type === "friend_request" ||
+          lastMessage.data.type === "friend_request_declined" ||
+          lastMessage.data.type === "friend_request_accepted"
         ) {
-          console.log("data", data);
-          queryClient.invalidateQueries({ queryKey: ["pendingRequests"] });
-          queryClient.invalidateQueries({ queryKey: ["friends"] });
+          console.log("data", lastMessage.data);
+          queryClient.invalidateQueries({
+            queryKey: ["pendingRequests", session.data?.user?.id],
+          });
+          queryClient.invalidateQueries({
+            queryKey: ["friends", session.data?.user?.id],
+          });
 
-          if (data.type === "friend_request") {
+          if (lastMessage.data.type === "friend_request") {
             toast({
               title: "New Friend Request",
-              description: `You received a friend request from ${data.username}`,
+              description: `You received a friend request from ${lastMessage.data.username}`,
             });
-          } else if (data.type === "friend_request_declined") {
+          } else if (lastMessage.data.type === "friend_request_declined") {
             toast({
               title: "Friend Request Declined",
-              description: `${data.username} declined your friend request`,
+              description: `${lastMessage.data.username} declined your friend request`,
             });
-          } else if (data.type === "friend_request_accepted") {
-            queryClient.invalidateQueries({ queryKey: ["dms"] });
+          } else if (lastMessage.data.type === "friend_request_accepted") {
+            queryClient.invalidateQueries({
+              queryKey: ["conversations", session.data?.user?.id],
+            });
             toast({
               title: "Friend Request Accepted",
-              description: `${data.username} accepted your friend request`,
+              description: `${lastMessage.data.username} accepted your friend request`,
             });
           }
         }
@@ -106,7 +105,9 @@ const FriendsList = () => {
       client.api.friendships.post({ addresseeName: friendUsername }),
     onSuccess: (data) => {
       console.log("data", data);
-      queryClient.invalidateQueries({ queryKey: ["pendingRequests"] }); // Refresh pending requests
+      queryClient.invalidateQueries({
+        queryKey: ["pendingRequests", session.data?.user?.id],
+      }); // Refresh pending requests
       toast({
         title: "Friend request sent!",
         description: "You can now wait for the user to accept your request.",
@@ -114,7 +115,7 @@ const FriendsList = () => {
       setFriendUsername("");
 
       sendMessage({
-        op: "friend_request",
+        op: "send_friend_request",
         to_user_id: data?.data?.addresseeId ?? "",
       });
     },
@@ -129,9 +130,15 @@ const FriendsList = () => {
   const acceptFriendRequestMutation = useMutation({
     mutationFn: (id: string) => client.api.friendships({ id }).accept.patch(),
     onSuccess: (data, id) => {
-      queryClient.invalidateQueries({ queryKey: ["pendingRequests"] });
-      queryClient.invalidateQueries({ queryKey: ["friends"] });
-      queryClient.invalidateQueries({ queryKey: ["dms"] });
+      queryClient.invalidateQueries({
+        queryKey: ["pendingRequests", session.data?.user?.id],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["friends", session.data?.user?.id],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["conversations", session.data?.user?.id],
+      });
 
       toast({
         title: "Friend request accepted!",
@@ -140,7 +147,7 @@ const FriendsList = () => {
 
       sendMessage({
         op: "accept_friend_request",
-        to_user_id: data?.data?.friendship?.requesterId ?? "",
+        to_user_id: data?.data?.friendship.requesterId ?? "",
       });
     },
   });
@@ -148,8 +155,12 @@ const FriendsList = () => {
   const declineFriendRequestMutation = useMutation({
     mutationFn: (id: string) => client.api.friendships({ id }).decline.patch(),
     onSuccess: (data, id) => {
-      queryClient.invalidateQueries({ queryKey: ["pendingRequests"] });
-      queryClient.invalidateQueries({ queryKey: ["friends"] });
+      queryClient.invalidateQueries({
+        queryKey: ["pendingRequests", session.data?.user?.id],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["friends", session.data?.user?.id],
+      });
       toast({
         title: "Friend request declined!",
         description: "You will no longer receive updates from this user.",
@@ -166,7 +177,9 @@ const FriendsList = () => {
     mutationFn: (friendshipId: string) =>
       client.api.friendships({ id: friendshipId }).delete(),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["friends"] });
+      queryClient.invalidateQueries({
+        queryKey: ["friends", session.data?.user?.id],
+      });
       toast({
         title: "Friend removed!",
         description: "You are no longer friends with this user.",
@@ -202,6 +215,11 @@ const FriendsList = () => {
 
   const handleRemoveFriend = (friendshipId: string) => {
     removeFriendMutation.mutate(friendshipId);
+  };
+
+  const handleOpenConversation = (conversationId: string, friendId: string) => {
+    setCurrentChatId(conversationId);
+    setOneOnOnePartner(conversationId, friendId);
   };
 
   return (
@@ -260,22 +278,30 @@ const FriendsList = () => {
               You can add friends with their username. It's case sensitive!
             </div>
             <div className="flex gap-2">
-              <Input
-                placeholder="Enter a username"
-                value={friendUsername}
-                onChange={(e) => setFriendUsername(e.target.value)}
-                className="flex-grow"
-              />
-              <Button
-                variant="default"
-                size="default"
-                onClick={handleSendFriendRequest}
-                disabled={sendRequestMutation.isPending}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleSendFriendRequest();
+                }}
+                className="flex gap-2 w-full"
               >
-                {sendRequestMutation.isPending
-                  ? "Sending..."
-                  : "Send Friend Request"}
-              </Button>
+                <Input
+                  placeholder="Enter a username"
+                  value={friendUsername}
+                  onChange={(e) => setFriendUsername(e.target.value)}
+                  className="flex-grow"
+                />
+                <Button
+                  variant="default"
+                  size="default"
+                  type="submit"
+                  disabled={sendRequestMutation.isPending}
+                >
+                  {sendRequestMutation.isPending
+                    ? "Sending..."
+                    : "Send Friend Request"}
+                </Button>
+              </form>
             </div>
           </div>
         )}
@@ -333,20 +359,30 @@ const FriendsList = () => {
             {filteredFriends?.map((friend) => (
               <ContextMenu key={friend.id}>
                 <ContextMenuTrigger asChild>
-                  <div className="flex items-center mb-4 p-2 hover:bg-accent rounded-md cursor-pointer">
-                    <Avatar className="h-10 w-10 mr-3">
-                      <AvatarFallback>{friend.name[0]}</AvatarFallback>
-                    </Avatar>
-                    <div className="flex-grow">
-                      <div className="font-semibold">{friend.name}</div>
-                      <div className="text-sm text-muted-foreground">
-                        Online
+                  <Link
+                    href={`/channels/me/${friend.conversationId}`}
+                    onClick={() =>
+                      handleOpenConversation(
+                        friend.conversationId as string,
+                        friend.id as string
+                      )
+                    }
+                  >
+                    <div className="flex items-center mb-4 p-2 hover:bg-accent rounded-md cursor-pointer">
+                      <Avatar className="h-10 w-10 mr-3">
+                        <AvatarFallback>{friend.name[0]}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-grow">
+                        <div className="font-semibold">{friend.name}</div>
+                        <div className="text-sm text-muted-foreground">
+                          Online
+                        </div>
                       </div>
+                      <Button variant="ghost" size="sm">
+                        <Users className="h-5 w-5" />
+                      </Button>
                     </div>
-                    <Button variant="ghost" size="sm">
-                      <Users className="h-5 w-5" />
-                    </Button>
-                  </div>
+                  </Link>
                 </ContextMenuTrigger>
                 <ContextMenuContent>
                   <ContextMenuItem

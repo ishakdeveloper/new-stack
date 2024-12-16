@@ -1,4 +1,4 @@
-defmodule WS.Guild do
+defmodule WS.Workers.Guild do
   use GenServer
   require Logger
   alias WS.GuildSupervisor
@@ -16,7 +16,7 @@ defmodule WS.Guild do
 
   end
 
-  defp via_tuple(user_id), do: {:via, Registry, {WS.GuildSessionRegistry, user_id}}
+  defp via_tuple(user_id), do: {:via, Registry, {WS.Workers.GuildSessionRegistry, user_id}}
 
   defp cast(user_id, params), do: GenServer.cast(via_tuple(user_id), params)
   defp call(user_id, params), do: GenServer.call(via_tuple(user_id), params)
@@ -35,7 +35,7 @@ defmodule WS.Guild do
         # No process exists; start a new one
         Logger.info("Starting guild session for guild_id: #{guild_id}")
         case DynamicSupervisor.start_child(
-               WS.GuildSessionSupervisor,
+               WS.Workers.Supervisors.GuildSessionSupervisor,
                {__MODULE__, Map.merge(initial_values, %{callers: callers})}
              ) do
           {:ok, pid} ->
@@ -59,8 +59,8 @@ defmodule WS.Guild do
 
   def child_spec(init), do: %{super(init) | id: Map.get(init, :guild_id)}
 
-  def count, do: Registry.count(WS.GuildSessionRegistry)
-  def lookup(guild_id), do: Registry.lookup(WS.GuildSessionRegistry, guild_id)
+  def count, do: Registry.count(WS.Workers.GuildSessionRegistry)
+  def lookup(guild_id), do: Registry.lookup(WS.Workers.GuildSessionRegistry, guild_id)
 
   def start_link(init) do
     GenServer.start_link(__MODULE__, init, name: via_tuple(init[:guild_id]))
@@ -69,7 +69,7 @@ defmodule WS.Guild do
   @impl true
   def init(state) do
     # register chat
-    WS.Chat.register_chat(guild_id: state.guild_id)
+    WS.Workers.Chat.register_chat(guild_id: state.guild_id)
 
     log_state_change("Initial state", state)
     {:ok, struct(State, state)}
@@ -94,7 +94,7 @@ defmodule WS.Guild do
 
   def ws_fan(user_ids, msg) do
     Enum.each(user_ids, fn user_id ->
-      WS.UserSession.send_ws(user_id, msg)
+      WS.Workers.UserSession.send_ws(user_id, msg)
     end)
   end
 
@@ -113,7 +113,7 @@ defmodule WS.Guild do
     Logger.debug("Joining guild - guild_id: #{state.guild_id}, user_id: #{user_id}")
 
     # Add user to chat process
-    WS.Chat.add_user(state.guild_id, user_id)
+    WS.Workers.Chat.add_user(state.guild_id, user_id)
 
     # Add user to guild state
     new_user_ids = [user_id | Enum.filter(state.user_ids, fn uid -> uid != user_id end)]
@@ -135,7 +135,7 @@ defmodule WS.Guild do
 
   defp leave_guild_impl(user_id, state) do
     # Remove user from chat process
-    WS.Chat.remove_user(state.guild_id, user_id)
+    WS.Workers.Chat.remove_user(state.guild_id, user_id)
 
     # Remove user from guild state
     user_ids = Enum.reject(state.user_ids, &(&1 == user_id))

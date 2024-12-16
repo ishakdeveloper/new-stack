@@ -1,4 +1,4 @@
-defmodule WS.PubSub do
+defmodule WS.Message.PubSub do
   @moduledoc """
   A PubSub module inspired by Phoenix PubSub, using Elixir's :pg module for broadcasting messages.
   """

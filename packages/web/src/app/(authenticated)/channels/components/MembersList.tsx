@@ -3,11 +3,12 @@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Avatar } from "@/components/ui/avatar";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { client } from "@/utils/client";
 import { useGuildStore } from "@/stores/useGuildStore";
 import UserProfilePopup from "./UserProfilePopup";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSocket } from "@/providers/SocketProvider";
 
 const MembersList = () => {
   const currentGuildId = useGuildStore((state) => state.currentGuildId);
@@ -19,6 +20,26 @@ const MembersList = () => {
       client.api.guilds({ guildId: currentGuildId ?? "" }).members.get(),
     enabled: !!currentGuildId,
   });
+
+  const { lastMessage } = useSocket();
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (lastMessage) {
+      try {
+        if (
+          lastMessage.data.type === "user_joined_guild" ||
+          lastMessage.data.type === "user_left_guild"
+        ) {
+          queryClient.invalidateQueries({
+            queryKey: ["guildMembers", currentGuildId],
+          });
+        }
+      } catch (error) {
+        console.error("Failed to parse message:", error);
+      }
+    }
+  }, [lastMessage]);
 
   return (
     <div className="w-60 border-l p-4">

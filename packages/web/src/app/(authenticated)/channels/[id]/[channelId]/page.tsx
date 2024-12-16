@@ -23,14 +23,14 @@ export default function ChannelPage({
     fetchParams();
   }, [params, setCurrentChannelId]);
 
-  useEffect(() => {
-    if (socket) {
-      socket.sendMessage({
-        op: "join_guild",
-        guild_id: getCurrentGuildId ?? "",
-      });
-    }
-  }, [getCurrentGuildId]);
+  // useEffect(() => {
+  //   if (socket) {
+  //     socket.sendMessage({
+  //       op: "join_guild",
+  //       guild_id: getCurrentGuildId ?? "",
+  //     });
+  //   }
+  // }, [getCurrentGuildId]);
 
   return (
     <>

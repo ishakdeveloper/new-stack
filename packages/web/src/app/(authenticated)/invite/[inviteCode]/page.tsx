@@ -1,11 +1,12 @@
 "use client";
 
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { client } from "@/utils/client";
 import { useToast } from "@/hooks/use-toast";
 import { useGuildStore } from "@/stores/useGuildStore";
+import { useSocket } from "@/providers/SocketProvider";
 
 export default function InvitePage({
   params,
@@ -16,7 +17,8 @@ export default function InvitePage({
   const { toast } = useToast();
 
   const setCurrentGuildId = useGuildStore((state) => state.setCurrentGuildId);
-
+  const { sendMessage } = useSocket();
+  const queryClient = useQueryClient();
   async function fetchParams() {
     const { inviteCode } = await params;
     return inviteCode;
@@ -43,10 +45,13 @@ export default function InvitePage({
         description: "You have joined the server",
       });
       if (guild) {
+        sendMessage({
+          op: "user_joined_guild",
+          guild_id: guild?.guilds.id,
+        });
+
         setCurrentGuildId(guild?.guilds.id);
-        router.push(
-          `/channels/${guild?.guilds.id}/${getDefaultChannel(guild?.guilds.id)}`
-        );
+        router.push(`/channels/${guild?.guilds.id}/${guild?.guilds.id}`);
       }
     },
     onError: (error: any) => {
@@ -62,6 +67,8 @@ export default function InvitePage({
           description: "Failed to join server",
           variant: "destructive",
         });
+
+        console.log(error);
       }
     },
   });

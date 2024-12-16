@@ -25,19 +25,19 @@ export default async function RootLayout({
   });
 
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body className="">
         <QueryProvider>
           <SocketProvider session={session?.data}>
-            {/* <ThemeProvider
+            <ThemeProvider
               attribute="class"
               defaultTheme="system"
               enableSystem
               disableTransitionOnChange
-            > */}
-            {children}
-            <Toaster />
-            {/* </ThemeProvider> */}
+            >
+              {children}
+              <Toaster />
+            </ThemeProvider>
           </SocketProvider>
         </QueryProvider>
       </body>

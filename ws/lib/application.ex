@@ -1,4 +1,4 @@
-defmodule Ws.Application do
+defmodule WS.Application do
   # See https://hexdocs.pm/elixir/Application.html
   # for more information on OTP Applications
   @moduledoc false
@@ -8,15 +8,15 @@ defmodule Ws.Application do
   @impl true
   def start(_type, _args) do
     children = [
-      {Registry, keys: :duplicate, name: WS.PubSub.Registry},
-      WS.PubSub,
-      WS.UserSessionSupervisor,
-      WS.ChatSupervisor,
-      WS.GuildSessionSupervisor,
-      {Plug.Cowboy, scheme: :http, plug: Ws, options: [port: 4001, dispatch: dispatch()]}
+      WS.Message.PubSub,
+      WS.Workers.Supervisors.UserSessionSupervisor,
+      WS.Workers.Supervisors.ChatSupervisor,
+      WS.Workers.Supervisors.GuildSessionSupervisor,
+      WS.Workers.Supervisors.ChannelSupervisor,
+      {Plug.Cowboy, scheme: :http, plug: WS, options: [port: 4001, dispatch: dispatch()]}
     ]
 
-    opts = [strategy: :one_for_one, name: Ws.Supervisor]
+    opts = [strategy: :one_for_one, name: WS.Supervisor]
     Supervisor.start_link(children, opts)
   end
 
@@ -31,7 +31,7 @@ defmodule Ws.Application do
   def dispatch do
     [
       {:_, [
-        {"/ws", WS.SocketHandler, []}
+        {"/ws", WS.Message.SocketHandler, []}
       ]}
     ]
   end

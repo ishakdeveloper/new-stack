@@ -9,6 +9,7 @@ import {
 } from "@tanstack/react-query";
 import LoadingScreen from "@/components/LoadingScreen";
 import { client } from "@/utils/client";
+import StatusBar from "@/app/components/StatusBar";
 
 export default async function ChannelsLayout({
   children,
@@ -18,6 +19,7 @@ export default async function ChannelsLayout({
   return (
     <>
       <div className="flex h-screen">
+        <StatusBar />
         <ServerList />
         <div className="flex flex-1">{children}</div>
       </div>

@@ -1,5 +1,5 @@
 {
-  "id": "ebe60daf-b1a3-444e-8627-8bcfd1a3567e",
+  "id": "0d574517-790d-4d2e-a8b6-eefa9197c2b8",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -506,8 +506,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.dm_channel_users": {
-      "name": "dm_channel_users",
+    "public.conversation_participants": {
+      "name": "conversation_participants",
       "schema": "",
       "columns": {
         "id": {
@@ -517,8 +517,8 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "channelId": {
-          "name": "channelId",
+        "conversationId": {
+          "name": "conversationId",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
@@ -539,12 +539,12 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "dm_channel_users_channelId_dm_channels_id_fk": {
-          "name": "dm_channel_users_channelId_dm_channels_id_fk",
-          "tableFrom": "dm_channel_users",
-          "tableTo": "dm_channels",
+        "conversation_participants_conversationId_conversations_id_fk": {
+          "name": "conversation_participants_conversationId_conversations_id_fk",
+          "tableFrom": "conversation_participants",
+          "tableTo": "conversations",
           "columnsFrom": [
-            "channelId"
+            "conversationId"
           ],
           "columnsTo": [
             "id"
@@ -552,9 +552,9 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "dm_channel_users_userId_user_id_fk": {
-          "name": "dm_channel_users_userId_user_id_fk",
-          "tableFrom": "dm_channel_users",
+        "conversation_participants_userId_user_id_fk": {
+          "name": "conversation_participants_userId_user_id_fk",
+          "tableFrom": "conversation_participants",
           "tableTo": "user",
           "columnsFrom": [
             "userId"
@@ -572,8 +572,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.dm_channels": {
-      "name": "dm_channels",
+    "public.conversations": {
+      "name": "conversations",
       "schema": "",
       "columns": {
         "id": {
@@ -583,12 +583,6 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "name": {
-          "name": "name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "isGroup": {
           "name": "isGroup",
           "type": "boolean",
@@ -596,11 +590,11 @@
           "notNull": true,
           "default": false
         },
-        "createdBy": {
-          "name": "createdBy",
-          "type": "uuid",
+        "name": {
+          "name": "name",
+          "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "createdAt": {
           "name": "createdAt",
@@ -611,21 +605,7 @@
         }
       },
       "indexes": {},
-      "foreignKeys": {
-        "dm_channels_createdBy_user_id_fk": {
-          "name": "dm_channels_createdBy_user_id_fk",
-          "tableFrom": "dm_channels",
-          "tableTo": "user",
-          "columnsFrom": [
-            "createdBy"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -1033,14 +1013,14 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "channelId": {
-          "name": "channelId",
+        "conversationId": {
+          "name": "conversationId",
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
         },
-        "dmChannelId": {
-          "name": "dmChannelId",
+        "channelId": {
+          "name": "channelId",
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
@@ -1057,8 +1037,28 @@
           "primaryKey": false,
           "notNull": false
         },
+        "isSystem": {
+          "name": "isSystem",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
         "attachments": {
           "name": "attachments",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "isEdited": {
+          "name": "isEdited",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "tags": {
+          "name": "tags",
           "type": "text[]",
           "primaryKey": false,
           "notNull": false
@@ -1080,6 +1080,19 @@
       },
       "indexes": {},
       "foreignKeys": {
+        "messages_conversationId_conversations_id_fk": {
+          "name": "messages_conversationId_conversations_id_fk",
+          "tableFrom": "messages",
+          "tableTo": "conversations",
+          "columnsFrom": [
+            "conversationId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
         "messages_channelId_channels_id_fk": {
           "name": "messages_channelId_channels_id_fk",
           "tableFrom": "messages",
@@ -1093,25 +1106,78 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "messages_dmChannelId_dm_channels_id_fk": {
-          "name": "messages_dmChannelId_dm_channels_id_fk",
-          "tableFrom": "messages",
-          "tableTo": "dm_channels",
-          "columnsFrom": [
-            "dmChannelId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
         "messages_authorId_user_id_fk": {
           "name": "messages_authorId_user_id_fk",
           "tableFrom": "messages",
           "tableTo": "user",
           "columnsFrom": [
             "authorId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.notifications": {
+      "name": "notifications",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "userId": {
+          "name": "userId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "data": {
+          "name": "data",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "isRead": {
+          "name": "isRead",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "notifications_userId_user_id_fk": {
+          "name": "notifications_userId_user_id_fk",
+          "tableFrom": "notifications",
+          "tableTo": "user",
+          "columnsFrom": [
+            "userId"
           ],
           "columnsTo": [
             "id"
