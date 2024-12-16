@@ -89,56 +89,72 @@ export const conversationRoutes = new Elysia()
         );
       }
 
-      // Create new group conversation
-      const [conversation] = await db
-        .insert(conversations)
-        .values({
-          isGroup: true,
-          name: name || "Group Chat",
-        })
-        .returning();
+      // Use a transaction
+      const result = await db.transaction(async (tx) => {
+        // Create new group conversation
+        const [conversation] = await tx
+          .insert(conversations)
+          .values({
+            isGroup: true,
+            name: name || "Group Chat",
+          })
+          .returning();
 
-      // Add all participants
-      await db.insert(conversationParticipants).values(
-        allParticipants.map((userId) => ({
+        // Add all participants
+        await tx.insert(conversationParticipants).values(
+          allParticipants.map((userId) => ({
+            conversationId: conversation.id,
+            userId: userId ?? "",
+          }))
+        );
+
+        // Create system message
+        await tx.insert(messages).values({
+          content: `${user?.name} has created a group.`,
+          authorId: user?.id ?? "",
+          isSystem: true,
           conversationId: conversation.id,
-          userId: userId ?? "",
-        }))
-      );
+        });
 
-      // Return the created conversation with participants
-      const result = await db
-        .select({
-          id: conversations.id,
-          name: conversations.name,
-          isGroup: conversations.isGroup,
-          createdAt: conversations.createdAt,
-          participants: {
-            id: conversationParticipants.id,
-            userId: conversationParticipants.userId,
-            conversationId: conversationParticipants.conversationId,
-            joinedAt: conversationParticipants.joinedAt,
-            user: {
-              id: UserTable.id,
-              name: UserTable.name,
-              email: UserTable.email,
-              image: UserTable.image,
+        // Return the created conversation with participants
+        const conversationWithParticipants = await tx
+          .select({
+            id: conversations.id,
+            name: conversations.name,
+            isGroup: conversations.isGroup,
+            createdAt: conversations.createdAt,
+            participants: {
+              id: conversationParticipants.id,
+              userId: conversationParticipants.userId,
+              conversationId: conversationParticipants.conversationId,
+              joinedAt: conversationParticipants.joinedAt,
+              user: {
+                id: UserTable.id,
+                name: UserTable.name,
+                email: UserTable.email,
+                image: UserTable.image,
+              },
             },
-          },
-        })
-        .from(conversations)
-        .leftJoin(
-          conversationParticipants,
-          eq(conversations.id, conversationParticipants.conversationId)
-        )
-        .leftJoin(UserTable, eq(conversationParticipants.userId, UserTable.id))
-        .where(eq(conversations.id, conversation.id))
-        .execute();
+          })
+          .from(conversations)
+          .leftJoin(
+            conversationParticipants,
+            eq(conversations.id, conversationParticipants.conversationId)
+          )
+          .leftJoin(
+            UserTable,
+            eq(conversationParticipants.userId, UserTable.id)
+          )
+          .where(eq(conversations.id, conversation.id))
+          .execute();
 
-      return {
-        ...result[0],
-        participants: result.map((r) => r.participants),
-      };
+        return {
+          ...conversationWithParticipants[0],
+          participants: conversationWithParticipants.map((r) => r.participants),
+        };
+      });
+
+      return result;
     },
     {
       body: t.Object({
@@ -423,6 +439,117 @@ export const conversationRoutes = new Elysia()
             }),
           })
         ),
+      }),
+    }
+  )
+  // Leave a group conversation
+  .delete(
+    "/conversations/:id/leave",
+    async ({ params, user }) => {
+      const { id } = params;
+
+      return await db.transaction(async (tx) => {
+        // Check if conversation exists and is a group
+        const conversation = await tx.query.conversations.findFirst({
+          where: (conversations, { eq }) => eq(conversations.id, id),
+        });
+
+        if (!conversation) {
+          throw new Error("Conversation not found");
+        }
+
+        if (!conversation.isGroup) {
+          throw new Error("Can only leave group conversations");
+        }
+
+        // Delete participant record
+        const result = await tx
+          .delete(conversationParticipants)
+          .where(
+            and(
+              eq(conversationParticipants.conversationId, id),
+              eq(conversationParticipants.userId, user?.id ?? "")
+            )
+          );
+
+        if (result.rowCount === 0) {
+          throw new Error("You are not a participant in this conversation");
+        }
+
+        // Add system message about user leaving
+        await tx.insert(messages).values({
+          content: `${user?.name} left the group`,
+          authorId: user?.id ?? "",
+          isSystem: true,
+          conversationId: id,
+        });
+
+        return { message: "Left conversation successfully" };
+      });
+    },
+    {
+      params: t.Object({
+        id: t.String(),
+      }),
+    }
+  )
+
+  // Join a group conversation
+  .post(
+    "/conversations/:id/join",
+    async ({ params, user }) => {
+      const { id } = params;
+
+      return await db.transaction(async (tx) => {
+        // Check if conversation exists and is a group
+        const conversation = await tx.query.conversations.findFirst({
+          where: (conversations, { eq }) => eq(conversations.id, id),
+        });
+
+        if (!conversation) {
+          throw new Error("Conversation not found");
+        }
+
+        if (!conversation.isGroup) {
+          throw new Error("Can only join group conversations");
+        }
+
+        // Check if already a participant
+        const existingParticipant = await tx
+          .select()
+          .from(conversationParticipants)
+          .where(
+            and(
+              eq(conversationParticipants.conversationId, id),
+              eq(conversationParticipants.userId, user?.id ?? "")
+            )
+          )
+          .limit(1);
+
+        if (existingParticipant[0]) {
+          throw new Error("Already a participant in this conversation");
+        }
+
+        // Add user as participant
+        await tx.insert(conversationParticipants).values({
+          conversationId: id,
+          userId: user?.id ?? "",
+        });
+
+        // Add system message about user joining
+        await tx.insert(messages).values({
+          content: `${user?.name} joined the group`,
+          authorId: user?.id ?? "",
+          isSystem: true,
+          conversationId: id,
+        });
+
+        return { message: "Joined conversation successfully" };
+      });
+    },
+    {
+      params: t.Object({
+        id: t.String(),
       }),
     }
   );

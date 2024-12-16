@@ -39,7 +39,11 @@ type WebSocketMessage =
   | { op: "ping" }
   | { op: "send_private_message"; to_user_id: string }
   | { op: "send_group_message"; group_id: string }
-  | { op: "create_group"; group_id: string; user_ids: string[] };
+  | { op: "create_group"; group_id: string; user_ids: string[] }
+  | { op: "join_group"; group_id: string }
+  | { op: "leave_group"; group_id: string }
+  | { op: "add_members"; group_id: string; user_ids: string[] }
+  | { op: "remove_members"; group_id: string; user_ids: string[] };
 
 type SocketContextType = {
   sendMessage: (message: WebSocketMessage) => void;
