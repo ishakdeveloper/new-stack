@@ -91,13 +91,7 @@ const PrivateChatbox = ({ slug }: { slug: string }) => {
   useEffect(() => {
     if (lastMessage) {
       try {
-        if (lastMessage.data === "pong") {
-          return;
-        }
-
-        const data = JSON.parse(lastMessage.data);
-
-        if (data.type === "private_message_received") {
+        if (lastMessage.data.type === "private_message_received") {
           queryClient.invalidateQueries({
             queryKey: ["messages", currentChatId],
           });

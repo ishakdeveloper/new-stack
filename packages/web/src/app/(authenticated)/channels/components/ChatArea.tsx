@@ -105,16 +105,10 @@ const ChatArea = () => {
   useEffect(() => {
     if (lastMessage) {
       try {
-        if (lastMessage.data === "pong") {
-          return;
-        }
-
-        const data = JSON.parse(lastMessage.data);
-
         if (
-          data.type === "message_received" ||
-          data.type === "user_joined_guild" ||
-          data.type === "user_left_guild"
+          lastMessage.data.type === "message_received" ||
+          lastMessage.data.type === "user_joined_guild" ||
+          lastMessage.data.type === "user_left_guild"
         ) {
           queryClient.invalidateQueries({
             queryKey: ["messages", currentChannelId],

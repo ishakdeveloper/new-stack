@@ -26,15 +26,10 @@ const MembersList = () => {
 
   useEffect(() => {
     if (lastMessage) {
-      if (lastMessage.data === "pong") {
-        return;
-      }
-
       try {
-        const data = JSON.parse(lastMessage.data);
         if (
-          data.type === "user_joined_guild" ||
-          data.type === "user_left_guild"
+          lastMessage.data.type === "user_joined_guild" ||
+          lastMessage.data.type === "user_left_guild"
         ) {
           queryClient.invalidateQueries({
             queryKey: ["guildMembers", currentGuildId],

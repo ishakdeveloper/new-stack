@@ -64,23 +64,9 @@ defmodule WS.Message.SocketHandler do
     {[text: "pong"], state}
   end
 
-  def websocket_handle({:binary, message}, state) do
-    # Inflate the compressed message
-    z = :zlib.open()
-    :zlib.inflateInit(z)
-    decompressed = :zlib.inflate(z, message)
-    :zlib.inflateEnd(z)
-    :zlib.close(z)
+  def websocket_handle({:text, message}, state) do
 
-    # Convert from list to binary if needed
-    decompressed_binary =
-      case decompressed do
-        [single] when is_binary(single) -> single
-        data when is_list(data) -> IO.iodata_to_binary(data)
-        binary when is_binary(binary) -> binary
-      end
-
-    case Jason.decode(decompressed_binary) do
+    case Jason.decode(message) do
       {:ok, %{"op" => op} = data} ->
         case handler(op, data, state) do
           {:reply, {:ok, response}, new_state} ->

@@ -232,13 +232,7 @@ const ChannelSidebar = () => {
   useEffect(() => {
     if (lastMessage) {
       try {
-        if (lastMessage.data === "pong") {
-          return;
-        }
-
-        const data = JSON.parse(lastMessage.data);
-
-        console.log(data);
+        console.log(lastMessage.data);
 
         if (
           [
@@ -246,7 +240,7 @@ const ChannelSidebar = () => {
             "channel_deleted",
             "category_created",
             "category_deleted",
-          ].includes(data.type)
+          ].includes(lastMessage.data.type)
         ) {
           queryClient.invalidateQueries({
             queryKey: ["channels", currentGuildId],

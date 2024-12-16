@@ -81,9 +81,7 @@ const ConversationSidebar = () => {
   useEffect(() => {
     try {
       if (lastMessage) {
-        if (lastMessage.data === "pong") return;
-        const data = JSON.parse(lastMessage?.data ?? "{}");
-        if (data.op === "channel_created") {
+        if (lastMessage.data.op === "channel_created") {
           queryClient.invalidateQueries({
             queryKey: ["conversations", session.data?.user.id],
           });

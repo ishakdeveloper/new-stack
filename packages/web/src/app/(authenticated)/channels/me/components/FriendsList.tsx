@@ -60,44 +60,33 @@ const FriendsList = () => {
   useEffect(() => {
     if (lastMessage) {
       try {
-        // Check if the message is "pong", and handle it separately
-        if (lastMessage.data === "pong") {
-          // Handle heartbeat "pong" without parsing
-          return;
-        }
-
-        // console.log("lastMessage", lastMessage);
-
-        // Try to parse the message as JSON
-        const data = JSON.parse(lastMessage.data);
-
         // Handle the parsed data if it is a valid JSON message
         if (
-          data.type === "friend_request" ||
-          data.type === "friend_request_declined" ||
-          data.type === "friend_request_accepted"
+          lastMessage.data.type === "friend_request" ||
+          lastMessage.data.type === "friend_request_declined" ||
+          lastMessage.data.type === "friend_request_accepted"
         ) {
-          console.log("data", data);
+          console.log("data", lastMessage.data);
           queryClient.invalidateQueries({ queryKey: ["pendingRequests"] });
           queryClient.invalidateQueries({ queryKey: ["friends"] });
 
-          if (data.type === "friend_request") {
+          if (lastMessage.data.type === "friend_request") {
             toast({
               title: "New Friend Request",
-              description: `You received a friend request from ${data.username}`,
+              description: `You received a friend request from ${lastMessage.data.username}`,
             });
-          } else if (data.type === "friend_request_declined") {
+          } else if (lastMessage.data.type === "friend_request_declined") {
             toast({
               title: "Friend Request Declined",
-              description: `${data.username} declined your friend request`,
+              description: `${lastMessage.data.username} declined your friend request`,
             });
-          } else if (data.type === "friend_request_accepted") {
+          } else if (lastMessage.data.type === "friend_request_accepted") {
             queryClient.invalidateQueries({
               queryKey: ["conversations", session.data?.user?.id],
             });
             toast({
               title: "Friend Request Accepted",
-              description: `${data.username} accepted your friend request`,
+              description: `${lastMessage.data.username} accepted your friend request`,
             });
           }
         }
