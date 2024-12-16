@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { authClient } from "@/utils/authClient";
 import { client } from "@/utils/client";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Users, Inbox, HelpCircle, Settings, Plus, Link } from "lucide-react";
 import NextLink from "next/link";
 import { useEffect } from "react";
@@ -15,9 +15,14 @@ import LoggedInUserBox from "../../components/LoggedInUserBox";
 import { useChatStore } from "@/stores/useChatStore";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { CreateGroupPopover } from "./CreateGroupPopover";
+import { useSocket } from "@/providers/SocketProvider";
+import { useToast } from "@/hooks/use-toast";
 
 const ConversationSidebar = () => {
   const session = authClient.useSession();
+  const { lastMessage } = useSocket();
+  const queryClient = useQueryClient();
   const { data: conversations } = useQuery({
     queryKey: ["conversations", session.data?.user?.id],
     queryFn: async () => {
@@ -27,6 +32,7 @@ const ConversationSidebar = () => {
   });
 
   const router = useRouter();
+  const { toast } = useToast();
 
   const setCurrentChatId = useChatStore((state) => state.setCurrentChatId);
   const currentChatId = useChatStore((state) => state.currentChatId);
@@ -34,11 +40,8 @@ const ConversationSidebar = () => {
 
   const getConversationName = (conversation: any) => {
     if (conversation.isGroup) {
-      // For group chats, join all participant names except the current user
-      return conversation.participants
-        .filter((p: any) => p.user.id !== session.data?.user?.id)
-        .map((p: any) => p.user.name)
-        .join(", ");
+      // For group chats, join all participant names
+      return conversation.participants.map((p: any) => p.user.name).join(", ");
     } else {
       // For DMs, show the other participant's name
       const otherParticipant = conversation.participants.find(
@@ -74,6 +77,27 @@ const ConversationSidebar = () => {
       return otherParticipant?.user.name[0] || "?";
     }
   };
+
+  useEffect(() => {
+    try {
+      if (lastMessage) {
+        if (lastMessage.data === "pong") return;
+        const data = JSON.parse(lastMessage?.data ?? "{}");
+        if (data.op === "channel_created") {
+          queryClient.invalidateQueries({
+            queryKey: ["conversations", session.data?.user.id],
+          });
+
+          toast({
+            title: "Group created",
+            description: `You have been added to a group`,
+          });
+        }
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  }, [lastMessage]);
 
   return (
     <div className="w-60 border-r flex flex-col">
@@ -117,7 +141,7 @@ const ConversationSidebar = () => {
           </NextLink>
           <div className="text-sm font-semibold mb-2 flex justify-between items-center px-2">
             <span>Direct Messages</span>
-            <Plus className="h-4 w-4" />
+            <CreateGroupPopover />
           </div>
           {conversations?.map((conversation) => (
             <button
@@ -132,7 +156,13 @@ const ConversationSidebar = () => {
               })}
             >
               <Avatar className="h-8 w-8 mr-2">
-                <AvatarFallback>{getAvatarText(conversation)}</AvatarFallback>
+                {conversation.isGroup ? (
+                  <AvatarFallback>
+                    <Users className="h-4 w-4" />
+                  </AvatarFallback>
+                ) : (
+                  <AvatarFallback>{getAvatarText(conversation)}</AvatarFallback>
+                )}
               </Avatar>
               <span className="flex-grow text-left">
                 {getConversationName(conversation)}

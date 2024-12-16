@@ -25,6 +25,7 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { useSocket } from "@/providers/SocketProvider";
+import { useChatStore } from "@/stores/useChatStore";
 
 export default function ServerList() {
   const currentUser = useUserStore((state) => state.currentUser);
@@ -34,6 +35,9 @@ export default function ServerList() {
   const lastVisitedChannels = useGuildStore(
     (state) => state.lastVisitedChannels
   );
+
+  const currentChatId = useChatStore((state) => state.currentChatId);
+
   const router = useRouter();
   const { data: guilds, isLoading } = useQuery({
     queryKey: ["guilds", currentUser?.id],
@@ -120,7 +124,18 @@ export default function ServerList() {
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Link href="/channels/me">
+            <Link
+              href={`/channels/me/${currentChatId ? `${currentChatId}` : ""}`}
+              onClick={() => {
+                if (currentGuildId) {
+                  socket?.sendMessage({
+                    op: "leave_guild",
+                    guild_id: currentGuildId,
+                  });
+                  setCurrentGuildId(null);
+                }
+              }}
+            >
               <Button
                 variant="secondary"
                 className="w-12 h-12 rounded-2xl p-0 bg-primary/10 hover:bg-primary/20"

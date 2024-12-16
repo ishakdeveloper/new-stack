@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/context-menu";
 import { useSocket } from "@/providers/SocketProvider";
 import { authClient } from "@/utils/authClient";
+import { useChatStore } from "@/stores/useChatStore";
 
 const FriendsList = () => {
   const [activeTab, setActiveTab] = useState<
@@ -37,6 +38,8 @@ const FriendsList = () => {
   const queryClient = useQueryClient();
   const { sendMessage, lastMessage, isConnected } = useSocket(); // Use the useSocket hook
   const session = authClient.useSession();
+  const setCurrentChatId = useChatStore((state) => state.setCurrentChatId);
+  const setOneOnOnePartner = useChatStore((state) => state.setOneOnOnePartner);
 
   // Queries for fetching data
   const { data: friends, isLoading: loadingFriends } = useQuery({
@@ -210,6 +213,11 @@ const FriendsList = () => {
     removeFriendMutation.mutate(friendshipId);
   };
 
+  const handleOpenConversation = (conversationId: string, friendId: string) => {
+    setCurrentChatId(conversationId);
+    setOneOnOnePartner(conversationId, friendId);
+  };
+
   return (
     <div className="flex-grow flex flex-col">
       <div className="p-4 border-b flex flex-col gap-4">
@@ -266,22 +274,30 @@ const FriendsList = () => {
               You can add friends with their username. It's case sensitive!
             </div>
             <div className="flex gap-2">
-              <Input
-                placeholder="Enter a username"
-                value={friendUsername}
-                onChange={(e) => setFriendUsername(e.target.value)}
-                className="flex-grow"
-              />
-              <Button
-                variant="default"
-                size="default"
-                onClick={handleSendFriendRequest}
-                disabled={sendRequestMutation.isPending}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleSendFriendRequest();
+                }}
+                className="flex gap-2 w-full"
               >
-                {sendRequestMutation.isPending
-                  ? "Sending..."
-                  : "Send Friend Request"}
-              </Button>
+                <Input
+                  placeholder="Enter a username"
+                  value={friendUsername}
+                  onChange={(e) => setFriendUsername(e.target.value)}
+                  className="flex-grow"
+                />
+                <Button
+                  variant="default"
+                  size="default"
+                  type="submit"
+                  disabled={sendRequestMutation.isPending}
+                >
+                  {sendRequestMutation.isPending
+                    ? "Sending..."
+                    : "Send Friend Request"}
+                </Button>
+              </form>
             </div>
           </div>
         )}
@@ -339,20 +355,30 @@ const FriendsList = () => {
             {filteredFriends?.map((friend) => (
               <ContextMenu key={friend.id}>
                 <ContextMenuTrigger asChild>
-                  <div className="flex items-center mb-4 p-2 hover:bg-accent rounded-md cursor-pointer">
-                    <Avatar className="h-10 w-10 mr-3">
-                      <AvatarFallback>{friend.name[0]}</AvatarFallback>
-                    </Avatar>
-                    <div className="flex-grow">
-                      <div className="font-semibold">{friend.name}</div>
-                      <div className="text-sm text-muted-foreground">
-                        Online
+                  <Link
+                    href={`/channels/me/${friend.conversationId}`}
+                    onClick={() =>
+                      handleOpenConversation(
+                        friend.conversationId as string,
+                        friend.id as string
+                      )
+                    }
+                  >
+                    <div className="flex items-center mb-4 p-2 hover:bg-accent rounded-md cursor-pointer">
+                      <Avatar className="h-10 w-10 mr-3">
+                        <AvatarFallback>{friend.name[0]}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-grow">
+                        <div className="font-semibold">{friend.name}</div>
+                        <div className="text-sm text-muted-foreground">
+                          Online
+                        </div>
                       </div>
+                      <Button variant="ghost" size="sm">
+                        <Users className="h-5 w-5" />
+                      </Button>
                     </div>
-                    <Button variant="ghost" size="sm">
-                      <Users className="h-5 w-5" />
-                    </Button>
-                  </div>
+                  </Link>
                 </ContextMenuTrigger>
                 <ContextMenuContent>
                   <ContextMenuItem

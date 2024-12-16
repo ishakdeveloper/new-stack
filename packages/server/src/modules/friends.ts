@@ -250,11 +250,32 @@ export const friendshipRoutes = new Elysia()
     // Fetch accepted friendships involving the current user
     const friendshipsData = await db
       .select({
-        friendshipId: friendships.id, // Add friendshipId to the selection
+        friendshipId: friendships.id,
         friendId: sql`CASE
            WHEN ${friendships.requesterId} = ${user.id} THEN ${friendships.addresseeId}
            ELSE ${friendships.requesterId}
          END`.as("friendId"),
+        conversationId: sql`(
+          SELECT cp."conversationId"
+          FROM ${conversationParticipants} cp
+          WHERE cp."userId" = ${user.id}
+          AND EXISTS (
+            SELECT 1 
+            FROM ${conversationParticipants} cp2
+            WHERE cp2."conversationId" = cp."conversationId"
+            AND cp2."userId" = CASE
+              WHEN ${friendships.requesterId} = ${user.id} THEN ${friendships.addresseeId}
+              ELSE ${friendships.requesterId}
+            END
+          )
+          AND EXISTS (
+            SELECT 1
+            FROM ${conversations} c
+            WHERE c.id = cp."conversationId"
+            AND c."isGroup" = false
+          )
+          LIMIT 1
+        )`.as("conversationId"),
       })
       .from(friendships)
       .where(
@@ -269,9 +290,10 @@ export const friendshipRoutes = new Elysia()
     }
 
     // Extract friend IDs and friendship IDs
-    const friendsWithIds = friendshipsData.map((f) => ({
-      friendshipId: f.friendshipId, // Include friendshipId
+    const friendIds = friendshipsData.map((f) => ({
+      friendshipId: f.friendshipId,
       friendId: f.friendId,
+      conversationId: f.conversationId,
     }));
 
     // Fetch user details for friends, including friendshipId
@@ -281,26 +303,23 @@ export const friendshipRoutes = new Elysia()
         name: UserTable.name,
         email: UserTable.email,
         image: UserTable.image,
-        friendshipId: sql`${sql.join(
-          friendsWithIds.map((item) => sql`${item.friendshipId}`),
-          sql`, `
-        )}`.as("friendshipId"), // Attach friendshipId here
       })
       .from(UserTable)
       .where(
         sql`${UserTable.id} IN (${sql.join(
-          friendsWithIds.map((item) => sql`${item.friendId}`),
+          friendIds.map((item) => sql`${item.friendId}`),
           sql`, `
         )})`
       );
 
-    // Attach the friendshipId to each friend
-    const friendsWithFriendshipId = friends.map((friend, index) => ({
+    // Attach the friendshipId and conversationId to each friend
+    const friendsWithDetails = friends.map((friend, index) => ({
       ...friend,
-      friendshipId: friendsWithIds[index].friendshipId, // Match friendshipId from previous query
+      friendshipId: friendIds[index].friendshipId,
+      conversationId: friendIds[index].conversationId,
     }));
 
-    return friendsWithFriendshipId;
+    return friendsWithDetails;
   })
 
   // Remove a friend

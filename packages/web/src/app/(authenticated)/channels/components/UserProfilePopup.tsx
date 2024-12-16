@@ -28,8 +28,8 @@ export default function UserProfilePopup({
   const { data: user, isLoading } = useQuery({
     queryKey: ["user", userId],
     queryFn: async () => {
-      const response = await client.api.auth.me.get();
-      return response.data;
+      const response = await client.api.users({ id: userId }).get();
+      return response?.data?.[0];
     },
   });
 
@@ -55,14 +55,14 @@ export default function UserProfilePopup({
             {/* Avatar */}
             <Avatar className="h-16 w-16 absolute -bottom-8 left-4 border-4 border-background">
               <AvatarFallback className="text-xl">
-                {user?.user?.name?.[0] ?? "U"}
+                {user?.name?.[0] ?? "U"}
               </AvatarFallback>
             </Avatar>
           </div>
 
           {/* User Info */}
           <div className="pt-10 px-2">
-            <h3 className="font-bold text-lg">{user?.user?.name}</h3>
+            <h3 className="font-bold text-lg">{user?.name}</h3>
 
             <div className="mt-3 flex gap-2">
               <Button size="sm">
@@ -80,18 +80,18 @@ export default function UserProfilePopup({
                   MEMBER SINCE
                 </h4>
                 <p className="text-xs">
-                  {user?.user?.createdAt
-                    ? new Date(user?.user?.createdAt).toLocaleDateString()
+                  {user?.createdAt
+                    ? new Date(user?.createdAt).toLocaleDateString()
                     : "N/A"}
                 </p>
               </div>
 
-              {user?.user?.email && (
+              {user?.email && (
                 <div>
                   <h4 className="text-xs font-semibold text-muted-foreground">
                     EMAIL
                   </h4>
-                  <p className="text-xs">{user?.user?.email}</p>
+                  <p className="text-xs">{user?.email}</p>
                 </div>
               )}
             </div>

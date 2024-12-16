@@ -318,6 +318,62 @@ defmodule WS.SocketHandler do
             remote_send_impl(response, state)
         end
 
+      {:ok, %{"op" => "create_group", "group_id" => group_id, "user_ids" => user_ids}} ->
+        Logger.debug("Processing create_group operation")
+        case state.user do
+          nil ->
+            Logger.warn("Create group attempt without registration")
+            response = %{"status" => "error", "message" => "You must register first"}
+            remote_send_impl(response, state)
+          %WS.User{id: user_id} ->
+            WS.Channel.start_channel(group_id, user_ids)
+            response = %{"status" => "success", "message" => "Group created"}
+            remote_send_impl(response, state)
+        end
+
+      {:ok, %{"op" => "join_group", "group_id" => group_id}} ->
+        Logger.debug("Processing join_group operation")
+        case state.user do
+          nil ->
+            Logger.warn("Join group attempt without registration")
+            response = %{"status" => "error", "message" => "You must register first"}
+            remote_send_impl(response, state)
+          %WS.User{id: user_id} ->
+            WS.Channel.broadcast_ws(group_id, %{"type" => "user_joined_group", "user_id" => user_id})
+            response = %{"status" => "success", "message" => "Joined group"}
+            remote_send_impl(response, state)
+        end
+
+      {:ok, %{"op" => "send_group_message", "group_id" => group_id, "message" => message}} ->
+        Logger.debug("Processing send_group_message operation")
+        case state.user do
+          nil ->
+            Logger.warn("Send group message attempt without registration")
+            response = %{"status" => "error", "message" => "You must register first"}
+            remote_send_impl(response, state)
+          %WS.User{id: user_id} ->
+            WS.Channel.broadcast_ws(group_id, %{
+              "type" => "group_message_received",
+              "message" => message,
+              "sender_id" => user_id
+            })
+            response = %{"status" => "success", "message" => "Message sent"}
+            remote_send_impl(response, state)
+        end
+
+      {:ok, %{"op" => "leave_group", "group_id" => group_id}} ->
+        Logger.debug("Processing leave_group operation")
+        case state.user do
+          nil ->
+            Logger.warn("Leave group attempt without registration")
+            response = %{"status" => "error", "message" => "You must register first"}
+            remote_send_impl(response, state)
+          %WS.User{id: user_id} ->
+            WS.Channel.remove_user(group_id, user_id)
+            response = %{"status" => "success", "message" => "Left group"}
+            remote_send_impl(response, state)
+        end
+
       # Default case for unknown operations
       {:ok, %{"op" => op}} ->
         Logger.warn("Unknown operation received: #{op}, state: #{inspect(state)}")
