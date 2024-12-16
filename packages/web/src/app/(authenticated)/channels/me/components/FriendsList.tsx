@@ -40,17 +40,16 @@ const FriendsList = () => {
   const session = authClient.useSession();
   const setCurrentChatId = useChatStore((state) => state.setCurrentChatId);
   const setOneOnOnePartner = useChatStore((state) => state.setOneOnOnePartner);
-
   // Queries for fetching data
   const { data: friends, isLoading: loadingFriends } = useQuery({
-    queryKey: ["friends"],
+    queryKey: ["friends", session.data?.user?.id],
     queryFn: () => {
       const data = client.api.friendships.get();
       return data;
     },
   });
   const { data: pendingRequests, isLoading: loadingRequests } = useQuery({
-    queryKey: ["pendingRequests"],
+    queryKey: ["pendingRequests", session.data?.user?.id],
     queryFn: () => {
       const data = client.api.friendships.pending.get();
       return data;
@@ -67,8 +66,12 @@ const FriendsList = () => {
           lastMessage.data.type === "friend_request_accepted"
         ) {
           console.log("data", lastMessage.data);
-          queryClient.invalidateQueries({ queryKey: ["pendingRequests"] });
-          queryClient.invalidateQueries({ queryKey: ["friends"] });
+          queryClient.invalidateQueries({
+            queryKey: ["pendingRequests", session.data?.user?.id],
+          });
+          queryClient.invalidateQueries({
+            queryKey: ["friends", session.data?.user?.id],
+          });
 
           if (lastMessage.data.type === "friend_request") {
             toast({
@@ -102,7 +105,9 @@ const FriendsList = () => {
       client.api.friendships.post({ addresseeName: friendUsername }),
     onSuccess: (data) => {
       console.log("data", data);
-      queryClient.invalidateQueries({ queryKey: ["pendingRequests"] }); // Refresh pending requests
+      queryClient.invalidateQueries({
+        queryKey: ["pendingRequests", session.data?.user?.id],
+      }); // Refresh pending requests
       toast({
         title: "Friend request sent!",
         description: "You can now wait for the user to accept your request.",
@@ -125,8 +130,12 @@ const FriendsList = () => {
   const acceptFriendRequestMutation = useMutation({
     mutationFn: (id: string) => client.api.friendships({ id }).accept.patch(),
     onSuccess: (data, id) => {
-      queryClient.invalidateQueries({ queryKey: ["pendingRequests"] });
-      queryClient.invalidateQueries({ queryKey: ["friends"] });
+      queryClient.invalidateQueries({
+        queryKey: ["pendingRequests", session.data?.user?.id],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["friends", session.data?.user?.id],
+      });
       queryClient.invalidateQueries({
         queryKey: ["conversations", session.data?.user?.id],
       });
@@ -146,8 +155,12 @@ const FriendsList = () => {
   const declineFriendRequestMutation = useMutation({
     mutationFn: (id: string) => client.api.friendships({ id }).decline.patch(),
     onSuccess: (data, id) => {
-      queryClient.invalidateQueries({ queryKey: ["pendingRequests"] });
-      queryClient.invalidateQueries({ queryKey: ["friends"] });
+      queryClient.invalidateQueries({
+        queryKey: ["pendingRequests", session.data?.user?.id],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["friends", session.data?.user?.id],
+      });
       toast({
         title: "Friend request declined!",
         description: "You will no longer receive updates from this user.",
@@ -164,7 +177,9 @@ const FriendsList = () => {
     mutationFn: (friendshipId: string) =>
       client.api.friendships({ id: friendshipId }).delete(),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["friends"] });
+      queryClient.invalidateQueries({
+        queryKey: ["friends", session.data?.user?.id],
+      });
       toast({
         title: "Friend removed!",
         description: "You are no longer friends with this user.",
