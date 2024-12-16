@@ -183,29 +183,64 @@ const PrivateChatbox = ({ slug }: { slug: string }) => {
         </div>
         <ScrollArea className="flex-grow p-4">
           <div className="flex flex-col-reverse">
-            {messages?.map((message) => (
-              <div key={message.id} className="mb-4">
-                <div className="flex items-center mb-1">
-                  <Avatar className="h-8 w-8 mr-2">
-                    {message.authorId.image ? (
-                      <img
-                        src={message.authorId.image}
-                        alt={`${message.authorId.name}'s avatar`}
-                      />
-                    ) : (
-                      <AvatarFallback>
-                        {message.authorId.name?.[0] ?? "U"}
-                      </AvatarFallback>
-                    )}
-                  </Avatar>
-                  <div className="font-semibold">{message.authorId.name}</div>
-                  <div className="text-muted-foreground text-xs ml-2">
-                    {new Date(message.createdAt).toLocaleString()}
+            {messages?.map((message) =>
+              message.isSystem ? (
+                <div key={message.id} className="mb-4">
+                  <div className="flex items-center mb-1">
+                    <div className="font-semibold">System</div>
+                    <div className="text-muted-foreground text-xs ml-2">
+                      {(() => {
+                        const date = new Date(message.createdAt);
+                        const today = new Date();
+                        const yesterday = new Date();
+                        yesterday.setDate(today.getDate() - 1);
+
+                        if (date.toDateString() === today.toDateString()) {
+                          return `Today ${date.toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}`;
+                        } else if (
+                          date.toDateString() === yesterday.toDateString()
+                        ) {
+                          return `Yesterday ${date.toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}`;
+                        } else {
+                          return date.toLocaleDateString();
+                        }
+                      })()}
+                    </div>
+                  </div>
+                  <div className="text-muted-foreground text-sm ml-10">
+                    {message.content}
                   </div>
                 </div>
-                <div className="ml-10">{message.content}</div>
-              </div>
-            ))}
+              ) : (
+                <div key={message.id} className="mb-4">
+                  <div className="flex items-center mb-1">
+                    <Avatar className="h-8 w-8 mr-2">
+                      {message.authorId.image ? (
+                        <img
+                          src={message.authorId.image}
+                          alt={`${message.authorId.name}'s avatar`}
+                        />
+                      ) : (
+                        <AvatarFallback>
+                          {message.authorId.name?.[0] ?? "U"}
+                        </AvatarFallback>
+                      )}
+                    </Avatar>
+                    <div className="font-semibold">{message.authorId.name}</div>
+                    <div className="text-muted-foreground text-xs ml-2">
+                      {new Date(message.createdAt).toLocaleString()}
+                    </div>
+                  </div>
+                  <div className="ml-10">{message.content}</div>
+                </div>
+              )
+            )}
           </div>
           <div ref={messagesEndRef} />
         </ScrollArea>

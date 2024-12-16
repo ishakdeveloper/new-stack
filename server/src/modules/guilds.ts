@@ -19,73 +19,74 @@ import { generateInviteCode } from "../lib/generateInviteCode";
 export const guildRoutes = new Elysia()
   .derive((context) => userMiddleware(context))
   // Create a guild
-  // Create a guild
   .post(
     "/guilds",
     async ({ body, user }) => {
       const { name } = body;
 
-      // Create the guild
-      const guild = await db
-        .insert(guilds)
-        .values({
-          name,
-          ownerId: user?.id ?? "",
-        })
-        .returning();
+      return await db.transaction(async (tx) => {
+        // Create the guild
+        const guild = await tx
+          .insert(guilds)
+          .values({
+            name,
+            ownerId: user?.id ?? "",
+          })
+          .returning();
 
-      const guildId = guild[0].id;
+        const guildId = guild[0].id;
 
-      // Add owner to the guild as a member
-      await db.insert(guildMembers).values({
-        guildId,
-        userId: user?.id ?? "",
-      });
-
-      // Create a default invite link for the guild
-      const inviteCode = generateInviteCode();
-      const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 7); // Set expiration to 7 days from now
-
-      await db.insert(guildInviteLinks).values({
-        inviteCode,
-        guildId,
-        inviterId: user?.id ?? "",
-        maxUses: null, // Unlimited by default
-        expiresAt,
-      });
-
-      // Create the default category
-      const category = await db
-        .insert(categories)
-        .values({
-          name: "Text channels", // Default category name
+        // Add owner to the guild as a member
+        await tx.insert(guildMembers).values({
           guildId,
-        })
-        .returning();
+          userId: user?.id ?? "",
+        });
 
-      const categoryId = category[0].id;
+        // Create a default invite link for the guild
+        const inviteCode = generateInviteCode();
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + 7); // Set expiration to 7 days from now
 
-      const defaultChannelName = "General";
-      const slug = generateChannelSlug(defaultChannelName);
-
-      // Create the default "General" channel within the category
-      const channel = await db
-        .insert(channels)
-        .values({
+        await tx.insert(guildInviteLinks).values({
+          inviteCode,
           guildId,
-          name: defaultChannelName, // Default channel name
-          categoryId,
-          slug,
-        })
-        .returning();
+          inviterId: user?.id ?? "",
+          maxUses: null, // Unlimited by default
+          expiresAt,
+        });
 
-      return {
-        guild: guild[0],
-        defaultCategory: category[0],
-        defaultChannel: channel[0],
-        defaultInviteCode: inviteCode, // Return the invite code
-      };
+        // Create the default category
+        const category = await tx
+          .insert(categories)
+          .values({
+            name: "Text channels", // Default category name
+            guildId,
+          })
+          .returning();
+
+        const categoryId = category[0].id;
+
+        const defaultChannelName = "General";
+        const slug = generateChannelSlug(defaultChannelName);
+
+        // Create the default "General" channel within the category
+        const channel = await tx
+          .insert(channels)
+          .values({
+            guildId,
+            name: defaultChannelName, // Default channel name
+            categoryId,
+            slug,
+          })
+          .returning();
+
+        return {
+          guild: guild[0],
+          defaultCategory: category[0],
+          defaultChannel: channel[0],
+          defaultInviteCode: inviteCode, // Return the invite code
+        };
+      });
     },
     {
       body: t.Object({
@@ -145,12 +146,14 @@ export const guildRoutes = new Elysia()
       const { guildId } = params;
       const { name } = body;
 
-      const updatedGuild = await db
-        .update(guilds)
-        .set({ name })
-        .where(eq(guilds.id, guildId))
-        .returning();
-      return updatedGuild[0];
+      return await db.transaction(async (tx) => {
+        const updatedGuild = await tx
+          .update(guilds)
+          .set({ name })
+          .where(eq(guilds.id, guildId))
+          .returning();
+        return updatedGuild[0];
+      });
     },
     {
       body: t.Object({
@@ -163,8 +166,10 @@ export const guildRoutes = new Elysia()
   .delete("/guilds/:guildId", async ({ params }) => {
     const { guildId } = params;
 
-    await db.delete(guilds).where(eq(guilds.id, guildId));
-    return { message: "Guild deleted successfully" };
+    return await db.transaction(async (tx) => {
+      await tx.delete(guilds).where(eq(guilds.id, guildId));
+      return { message: "Guild deleted successfully" };
+    });
   })
 
   // Leave a guild
@@ -173,33 +178,37 @@ export const guildRoutes = new Elysia()
 
     console.log("Deleting membership:", { guildId, userId: user?.id });
 
-    const result = await db
-      .delete(guildMembers)
-      .where(
-        and(
-          eq(guildMembers.guildId, guildId),
-          eq(guildMembers.userId, user?.id ?? "")
-        )
-      );
+    return await db.transaction(async (tx) => {
+      const result = await tx
+        .delete(guildMembers)
+        .where(
+          and(
+            eq(guildMembers.guildId, guildId),
+            eq(guildMembers.userId, user?.id ?? "")
+          )
+        );
 
-    // Create a system message for user leaving
-    await db.insert(messages).values({
-      channelId: await db
+      // Get the general channel ID
+      const generalChannel = await tx
         .select()
         .from(channels)
         .where(and(eq(channels.guildId, guildId), eq(channels.name, "General")))
-        .limit(1)
-        .then((results) => results[0].id),
-      authorId: user?.id ?? "",
-      content: `${user?.name} left the server`,
-      isSystem: true,
+        .limit(1);
+
+      // Create a system message for user leaving
+      await tx.insert(messages).values({
+        channelId: generalChannel[0].id,
+        authorId: user?.id ?? "",
+        content: `${user?.name} left the server`,
+        isSystem: true,
+      });
+
+      console.log("Rows deleted:", result.rowCount);
+
+      if (result.rowCount === 0) {
+        return { error: "You are not a member of this guild or already left." };
+      }
+
+      return { message: "Left guild successfully" };
     });
-
-    console.log("Rows deleted:", result.rowCount);
-
-    if (result.rowCount === 0) {
-      return { error: "You are not a member of this guild or already left." };
-    }
-
-    return { message: "Left guild successfully" };
   });

@@ -21,7 +21,7 @@ defmodule WS.Message.Chat do
     end
   end
 
-  def send_private_message(%{"to_user_id" => to_user_id, "content" => content}, state) do
+  def send_private_message(%{"to_user_id" => to_user_id}, state) do
     Logger.debug("Processing send_private_message operation to #{inspect(to_user_id)}")
     case state.user do
       nil ->
@@ -30,7 +30,6 @@ defmodule WS.Message.Chat do
       %WS.User{id: user_id} ->
         UserSession.send_ws(to_user_id, %{
           "type" => "private_message_received",
-          "content" => content,
           "from_user" => %{
             "id" => user_id
           }

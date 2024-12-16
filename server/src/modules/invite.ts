@@ -21,58 +21,60 @@ export const inviteRoutes = new Elysia()
     async ({ body, user }) => {
       const { guildId, maxUses } = body;
 
-      // Check if user is already a member of this guild
-      const existingMember = await db
-        .select()
-        .from(guildMembers)
-        .where(
-          and(
-            eq(guildMembers.guildId, guildId),
-            eq(guildMembers.userId, user?.id ?? "")
+      return await db.transaction(async (tx) => {
+        // Check if user is already a member of this guild
+        const existingMember = await tx
+          .select()
+          .from(guildMembers)
+          .where(
+            and(
+              eq(guildMembers.guildId, guildId),
+              eq(guildMembers.userId, user?.id ?? "")
+            )
           )
-        )
-        .limit(1)
-        .then((results) => results[0]);
+          .limit(1)
+          .then((results) => results[0]);
 
-      if (!existingMember) {
-        throw new Error(
-          "You must be a member of this guild to create an invite"
-        );
-      }
+        if (!existingMember) {
+          throw new Error(
+            "You must be a member of this guild to create an invite"
+          );
+        }
 
-      // Check if invite code already exists for this guild
-      const existingInvite = await db
-        .select()
-        .from(guildInviteLinks)
-        .where(
-          and(
-            eq(guildInviteLinks.guildId, guildId),
-            eq(guildInviteLinks.status, "active")
+        // Check if invite code already exists for this guild
+        const existingInvite = await tx
+          .select()
+          .from(guildInviteLinks)
+          .where(
+            and(
+              eq(guildInviteLinks.guildId, guildId),
+              eq(guildInviteLinks.status, "active")
+            )
           )
-        )
-        .limit(1)
-        .then((results) => results[0]);
+          .limit(1)
+          .then((results) => results[0]);
 
-      if (existingInvite) {
-        return existingInvite;
-      }
+        if (existingInvite) {
+          return existingInvite;
+        }
 
-      const inviteCode = generateInviteCode();
-      const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 7); // Set expiration to 7 days from now
+        const inviteCode = generateInviteCode();
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + 7); // Set expiration to 7 days from now
 
-      const invite = await db
-        .insert(guildInviteLinks)
-        .values({
-          inviteCode,
-          guildId,
-          inviterId: user?.id ?? "",
-          maxUses,
-          expiresAt,
-        })
-        .returning();
+        const invite = await tx
+          .insert(guildInviteLinks)
+          .values({
+            inviteCode,
+            guildId,
+            inviterId: user?.id ?? "",
+            maxUses,
+            expiresAt,
+          })
+          .returning();
 
-      return invite[0];
+        return invite[0];
+      });
     },
     {
       body: t.Object({
@@ -86,81 +88,83 @@ export const inviteRoutes = new Elysia()
   .post("/invites/:inviteCode/use", async ({ params, user }) => {
     const { inviteCode } = params;
 
-    const invite = await db
-      .select()
-      .from(guildInviteLinks)
-      .where(eq(guildInviteLinks.inviteCode, inviteCode))
-      .limit(1)
-      .then((results) => results[0]);
-
-    if (!invite || invite.status !== "active") {
-      throw new Error("Invalid invite code");
-    }
-
-    if (new Date() > (invite.expiresAt ?? new Date())) {
-      throw new Error("Invite has expired");
-    }
-
-    if (invite.maxUses && invite.uses && invite.uses >= invite.maxUses) {
-      throw new Error("Invite link has reached its maximum uses");
-    }
-
-    // Check if user is already a member
-    const existingMember = await db
-      .select()
-      .from(guildMembers)
-      .where(
-        and(
-          eq(guildMembers.guildId, invite.guildId),
-          eq(guildMembers.userId, user?.id ?? "")
-        )
-      )
-      .limit(1)
-      .then((results) => results[0]);
-
-    if (existingMember) {
-      throw new Error("You are already a member of this server");
-    }
-
-    // Add the user to the guild
-    await db.insert(guildMembers).values({
-      guildId: invite.guildId,
-      userId: user?.id ?? "",
-    });
-
-    // Create a system message for user joining
-    await db.insert(messages).values({
-      channelId: await db
+    return await db.transaction(async (tx) => {
+      const invite = await tx
         .select()
-        .from(channels)
+        .from(guildInviteLinks)
+        .where(eq(guildInviteLinks.inviteCode, inviteCode))
+        .limit(1)
+        .then((results) => results[0]);
+
+      if (!invite || invite.status !== "active") {
+        throw new Error("Invalid invite code");
+      }
+
+      if (new Date() > (invite.expiresAt ?? new Date())) {
+        throw new Error("Invite has expired");
+      }
+
+      if (invite.maxUses && invite.uses && invite.uses >= invite.maxUses) {
+        throw new Error("Invite link has reached its maximum uses");
+      }
+
+      // Check if user is already a member
+      const existingMember = await tx
+        .select()
+        .from(guildMembers)
         .where(
           and(
-            eq(channels.guildId, invite.guildId),
-            eq(channels.name, "General")
+            eq(guildMembers.guildId, invite.guildId),
+            eq(guildMembers.userId, user?.id ?? "")
           )
         )
         .limit(1)
-        .then((results) => results[0].id),
-      authorId: user?.id ?? "",
-      content: `${user?.name} joined the server`,
-      isSystem: true,
+        .then((results) => results[0]);
+
+      if (existingMember) {
+        throw new Error("You are already a member of this server");
+      }
+
+      // Add the user to the guild
+      await tx.insert(guildMembers).values({
+        guildId: invite.guildId,
+        userId: user?.id ?? "",
+      });
+
+      // Create a system message for user joining
+      await tx.insert(messages).values({
+        channelId: await tx
+          .select()
+          .from(channels)
+          .where(
+            and(
+              eq(channels.guildId, invite.guildId),
+              eq(channels.name, "General")
+            )
+          )
+          .limit(1)
+          .then((results) => results[0].id),
+        authorId: user?.id ?? "",
+        content: `${user?.name} joined the server`,
+        isSystem: true,
+      });
+
+      // Track invite usage
+      await tx.insert(inviteLinkUsages).values({
+        inviteLinkId: invite.id,
+        invitedUserId: user?.id ?? "",
+      });
+
+      // Increment usage count
+      await tx
+        .update(guildInviteLinks)
+        .set({
+          uses: (invite.uses ?? 0) + 1,
+        })
+        .where(eq(guildInviteLinks.id, invite.id));
+
+      return { message: "Invite used successfully" };
     });
-
-    // Track invite usage
-    await db.insert(inviteLinkUsages).values({
-      inviteLinkId: invite.id,
-      invitedUserId: user?.id ?? "",
-    });
-
-    // Increment usage count
-    await db
-      .update(guildInviteLinks)
-      .set({
-        uses: (invite.uses ?? 0) + 1,
-      })
-      .where(eq(guildInviteLinks.id, invite.id));
-
-    return { message: "Invite used successfully" };
   })
   // Get all invite links for a guild
   .get("/invites", async ({ user }) => {
@@ -188,9 +192,9 @@ export const inviteRoutes = new Elysia()
 
     const guild = await db
       .select()
-      .from(guildInviteLinks) // Add guildInviteLinks to FROM
-      .innerJoin(guilds, eq(guildInviteLinks.guildId, guilds.id)) // Join guilds with guildInviteLinks
-      .where(eq(guildInviteLinks.inviteCode, inviteCode)) // Filter by invite code
+      .from(guildInviteLinks)
+      .innerJoin(guilds, eq(guildInviteLinks.guildId, guilds.id))
+      .where(eq(guildInviteLinks.inviteCode, inviteCode))
       .limit(1)
       .then((results) => results[0]);
 

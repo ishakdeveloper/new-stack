@@ -22,46 +22,48 @@ export const guildChannelRoutes = new Elysia()
       const { guildId, channelId } = params;
       const { content } = body as { content: string };
 
-      // Ensure the user is part of the guild
-      const guildMembership = await db
-        .select()
-        .from(guildMembers)
-        .where(
-          sql`${eq(guildMembers.guildId, guildId)} AND 
-          ${eq(guildMembers.userId, user?.id ?? "")}`
-        )
-        .limit(1);
+      return await db.transaction(async (tx) => {
+        // Ensure the user is part of the guild
+        const guildMembership = await tx
+          .select()
+          .from(guildMembers)
+          .where(
+            sql`${eq(guildMembers.guildId, guildId)} AND 
+            ${eq(guildMembers.userId, user?.id ?? "")}`
+          )
+          .limit(1);
 
-      if (!guildMembership[0]) {
-        throw new Error("User is not a member of this guild");
-      }
+        if (!guildMembership[0]) {
+          throw new Error("User is not a member of this guild");
+        }
 
-      // Send the message
-      const message = await db
-        .insert(messages)
-        .values({
-          content,
-          authorId: user?.id ?? "",
-          channelId,
-        })
-        .returning();
+        // Send the message
+        const message = await tx
+          .insert(messages)
+          .values({
+            content,
+            authorId: user?.id ?? "",
+            channelId,
+          })
+          .returning();
 
-      // Get author info
-      const author = await db
-        .select({
-          id: UserTable.id,
-          name: UserTable.name,
-          email: UserTable.email,
-          image: UserTable.image,
-        })
-        .from(UserTable)
-        .where(eq(UserTable.id, user?.id ?? ""))
-        .limit(1);
+        // Get author info
+        const author = await tx
+          .select({
+            id: UserTable.id,
+            name: UserTable.name,
+            email: UserTable.email,
+            image: UserTable.image,
+          })
+          .from(UserTable)
+          .where(eq(UserTable.id, user?.id ?? ""))
+          .limit(1);
 
-      return {
-        ...message[0],
-        author: author[0],
-      };
+        return {
+          ...message[0],
+          author: author[0],
+        };
+      });
     }
   )
 
@@ -71,40 +73,42 @@ export const guildChannelRoutes = new Elysia()
     async ({ params, user }) => {
       const { guildId, channelId } = params;
 
-      // Ensure the user is part of the guild
-      const guildMembership = await db
-        .select()
-        .from(guildMembers)
-        .where(
-          sql`${eq(guildMembers.guildId, guildId)} AND 
-          ${eq(guildMembers.userId, user?.id ?? "")}`
-        )
-        .limit(1);
+      return await db.transaction(async (tx) => {
+        // Ensure the user is part of the guild
+        const guildMembership = await tx
+          .select()
+          .from(guildMembers)
+          .where(
+            sql`${eq(guildMembers.guildId, guildId)} AND 
+            ${eq(guildMembers.userId, user?.id ?? "")}`
+          )
+          .limit(1);
 
-      if (!guildMembership[0]) {
-        throw new Error("User is not a member of this guild");
-      }
+        if (!guildMembership[0]) {
+          throw new Error("User is not a member of this guild");
+        }
 
-      // Fetch messages in the channel with author info
-      const messagesList = await db
-        .select({
-          message: messages,
-          author: {
-            id: UserTable.id,
-            name: UserTable.name,
-            email: UserTable.email,
-            image: UserTable.image,
-          },
-        })
-        .from(messages)
-        .leftJoin(UserTable, eq(messages.authorId, UserTable.id))
-        .where(eq(messages.channelId, channelId))
-        .orderBy(desc(messages.createdAt));
+        // Fetch messages in the channel with author info
+        const messagesList = await tx
+          .select({
+            message: messages,
+            author: {
+              id: UserTable.id,
+              name: UserTable.name,
+              email: UserTable.email,
+              image: UserTable.image,
+            },
+          })
+          .from(messages)
+          .leftJoin(UserTable, eq(messages.authorId, UserTable.id))
+          .where(eq(messages.channelId, channelId))
+          .orderBy(desc(messages.createdAt));
 
-      return messagesList.map(({ message, author }) => ({
-        ...message,
-        author,
-      }));
+        return messagesList.map(({ message, author }) => ({
+          ...message,
+          author,
+        }));
+      });
     },
     {
       params: t.Object({

@@ -41,22 +41,27 @@ const ConversationSidebar = () => {
   const getConversationName = (conversation: any) => {
     if (conversation.isGroup) {
       // For group chats, join all participant names
-      return conversation.participants.map((p: any) => p.user.name).join(", ");
+      const participantNames = conversation.participants
+        .filter((p: any) => p.user && p.user.name)
+        .map((p: any) => p.user.name);
+      return participantNames.join(", ") || "Unnamed Group";
     } else {
       // For DMs, show the other participant's name
       const otherParticipant = conversation.participants.find(
-        (p: any) => p.user.id !== session.data?.user?.id
+        (p: any) => p.user?.id !== session.data?.user?.id
       );
-      return otherParticipant?.user.name || "Unknown User";
+      return otherParticipant?.user?.name || "Unknown User";
     }
   };
 
   const handleConversationClick = (conversation: any) => {
     const otherParticipant = conversation.participants.find(
-      (p: any) => p.user.id !== session.data?.user?.id
+      (p: any) => p.user?.id !== session.data?.user?.id
     );
 
-    setOneOnOnePartner(conversation.id, otherParticipant.user.id);
+    if (otherParticipant?.user?.id) {
+      setOneOnOnePartner(conversation.id, otherParticipant.user.id);
+    }
     setCurrentChatId(conversation.id);
 
     router.push(`/channels/me/${conversation.id}`);
@@ -64,17 +69,17 @@ const ConversationSidebar = () => {
 
   const getAvatarText = (conversation: any) => {
     if (conversation.isGroup) {
-      // For groups, use first letter of first two participants
-      return conversation.participants
-        .slice(0, 2)
-        .map((p: any) => p.user.name[0])
-        .join("");
+      // For groups, use first letter of first two valid participants
+      const validParticipants = conversation.participants
+        .filter((p: any) => p.user?.name)
+        .slice(0, 2);
+      return validParticipants.map((p: any) => p.user.name[0]).join("") || "G";
     } else {
       // For DMs, use first letter of other participant's name
       const otherParticipant = conversation.participants.find(
-        (p: any) => p.user.id !== session.data?.user?.id
+        (p: any) => p.user?.id !== session.data?.user?.id
       );
-      return otherParticipant?.user.name[0] || "?";
+      return otherParticipant?.user?.name?.[0] || "?";
     }
   };
 

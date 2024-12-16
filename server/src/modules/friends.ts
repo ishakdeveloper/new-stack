@@ -14,54 +14,56 @@ export const friendshipRoutes = new Elysia()
     async ({ body, user }) => {
       const { addresseeName } = body;
 
-      // Find addressee by name
-      const addressee = await db
-        .select()
-        .from(UserTable)
-        .where(eq(UserTable.name, addresseeName));
+      return await db.transaction(async (tx) => {
+        // Find addressee by name
+        const addressee = await tx
+          .select()
+          .from(UserTable)
+          .where(eq(UserTable.name, addresseeName));
 
-      if (!addressee.length) {
-        throw new Error("User not found.");
-      }
+        if (!addressee.length) {
+          throw new Error("User not found.");
+        }
 
-      const addresseeId = addressee[0].id;
+        const addresseeId = addressee[0].id;
 
-      // Prevent sending friend request to self
-      if (addresseeId === user?.id) {
-        throw new Error("You cannot send a friend request to yourself.");
-      }
+        // Prevent sending friend request to self
+        if (addresseeId === user?.id) {
+          throw new Error("You cannot send a friend request to yourself.");
+        }
 
-      // Validation: Check if a request already exists or if they're already friends
-      const existingFriendship = await db
-        .select()
-        .from(friendships)
-        .where(
-          sql`${eq(friendships.requesterId, user?.id ?? "")} AND ${eq(
-            friendships.addresseeId,
-            addresseeId
-          )} OR 
-            ${eq(friendships.requesterId, addresseeId)} AND ${eq(
-            friendships.addresseeId,
-            user?.id ?? ""
-          )}`
-        );
+        // Validation: Check if a request already exists or if they're already friends
+        const existingFriendship = await tx
+          .select()
+          .from(friendships)
+          .where(
+            sql`${eq(friendships.requesterId, user?.id ?? "")} AND ${eq(
+              friendships.addresseeId,
+              addresseeId
+            )} OR 
+              ${eq(friendships.requesterId, addresseeId)} AND ${eq(
+              friendships.addresseeId,
+              user?.id ?? ""
+            )}`
+          );
 
-      if (existingFriendship.length > 0) {
-        throw new Error(
-          "Friend request already exists or you're already friends."
-        );
-      }
+        if (existingFriendship.length > 0) {
+          throw new Error(
+            "Friend request already exists or you're already friends."
+          );
+        }
 
-      const friendRequest = await db
-        .insert(friendships)
-        .values({
-          requesterId: user?.id ?? "",
-          addresseeId,
-          status: "pending",
-        })
-        .returning();
+        const friendRequest = await tx
+          .insert(friendships)
+          .values({
+            requesterId: user?.id ?? "",
+            addresseeId,
+            status: "pending",
+          })
+          .returning();
 
-      return friendRequest[0];
+        return friendRequest[0];
+      });
     },
     {
       body: t.Object({
@@ -74,72 +76,71 @@ export const friendshipRoutes = new Elysia()
   .patch("/friendships/:id/accept", async ({ params, user }) => {
     const { id } = params;
 
-    // Check if the request exists
-    const existingRequest = await db
-      .select({
-        id: friendships.id,
-        requesterId: friendships.requesterId,
-        addresseeId: friendships.addresseeId,
-      })
-      .from(friendships)
-      .where(eq(friendships.id, id));
+    return await db.transaction(async (tx) => {
+      // Check if the request exists
+      const existingRequest = await tx
+        .select({
+          id: friendships.id,
+          requesterId: friendships.requesterId,
+          addresseeId: friendships.addresseeId,
+        })
+        .from(friendships)
+        .where(eq(friendships.id, id));
 
-    if (!existingRequest.length) {
-      throw new Error("Friend request not found.");
-    }
+      if (!existingRequest.length) {
+        throw new Error("Friend request not found.");
+      }
 
-    const { requesterId, addresseeId } = existingRequest[0];
-    const loggedInUserId = user?.id ?? "";
+      const { requesterId, addresseeId } = existingRequest[0];
+      const loggedInUserId = user?.id ?? "";
 
-    // Ensure the logged-in user is the addressee
-    if (loggedInUserId !== addresseeId) {
-      throw new Error("You are not authorized to accept this request.");
-    }
+      // Ensure the logged-in user is the addressee
+      if (loggedInUserId !== addresseeId) {
+        throw new Error("You are not authorized to accept this request.");
+      }
 
-    // Accept the friend request
-    const updatedRequest = await db
-      .update(friendships)
-      .set({
-        status: "accepted",
-      })
-      .where(eq(friendships.id, id))
-      .returning();
+      // Accept the friend request
+      const updatedRequest = await tx
+        .update(friendships)
+        .set({
+          status: "accepted",
+        })
+        .where(eq(friendships.id, id))
+        .returning();
 
-    // First, check for an existing conversation with exactly these two participants
-    const existingConversation = await db
-      .select({
-        id: conversations.id,
-      })
-      .from(conversations)
-      .where(
-        and(
-          eq(conversations.isGroup, false),
-          sql`(
-            SELECT COUNT(DISTINCT cp."userId")
-            FROM ${conversationParticipants} cp
-            WHERE cp."conversationId" = ${conversations.id}
-          ) = 2`,
-          sql`EXISTS (
-            SELECT 1
-            FROM ${conversationParticipants} cp
-            WHERE cp."conversationId" = ${conversations.id}
-            AND cp."userId" = ${requesterId}
-          )`,
-          sql`EXISTS (
-            SELECT 1
-            FROM ${conversationParticipants} cp
-            WHERE cp."conversationId" = ${conversations.id}
-            AND cp."userId" = ${addresseeId}
-          )`
+      // First, check for an existing conversation with exactly these two participants
+      const existingConversation = await tx
+        .select({
+          id: conversations.id,
+        })
+        .from(conversations)
+        .where(
+          and(
+            eq(conversations.isGroup, false),
+            sql`(
+              SELECT COUNT(DISTINCT cp."userId")
+              FROM ${conversationParticipants} cp
+              WHERE cp."conversationId" = ${conversations.id}
+            ) = 2`,
+            sql`EXISTS (
+              SELECT 1
+              FROM ${conversationParticipants} cp
+              WHERE cp."conversationId" = ${conversations.id}
+              AND cp."userId" = ${requesterId}
+            )`,
+            sql`EXISTS (
+              SELECT 1
+              FROM ${conversationParticipants} cp
+              WHERE cp."conversationId" = ${conversations.id}
+              AND cp."userId" = ${addresseeId}
+            )`
+          )
         )
-      )
-      .limit(1);
+        .limit(1);
 
-    let conversation;
+      let conversation;
 
-    if (existingConversation.length === 0) {
-      // Begin a transaction to ensure atomicity
-      await db.transaction(async (tx) => {
+      if (existingConversation.length === 0) {
         // Create a new conversation
         const [newConversation] = await tx
           .insert(conversations)
@@ -161,38 +162,40 @@ export const friendshipRoutes = new Elysia()
         ]);
 
         conversation = newConversation;
-      });
-    } else {
-      conversation = existingConversation[0];
-    }
+      } else {
+        conversation = existingConversation[0];
+      }
 
-    return {
-      message: "Friendship accepted.",
-      friendship: updatedRequest[0],
-    };
+      return {
+        message: "Friendship accepted.",
+        friendship: updatedRequest[0],
+      };
+    });
   })
 
   // Decline a friend request
   .patch("/friendships/:id/decline", async ({ params }) => {
     const { id } = params;
 
-    // Check if the request exists
-    const existingRequest = await db
-      .select()
-      .from(friendships)
-      .where(eq(friendships.id, id));
+    return await db.transaction(async (tx) => {
+      // Check if the request exists
+      const existingRequest = await tx
+        .select()
+        .from(friendships)
+        .where(eq(friendships.id, id));
 
-    if (!existingRequest.length) {
-      throw new Error("Friend request not found.");
-    }
+      if (!existingRequest.length) {
+        throw new Error("Friend request not found.");
+      }
 
-    // Delete the declined friend request
-    const deletedRequest = await db
-      .delete(friendships)
-      .where(eq(friendships.id, id))
-      .returning();
+      // Delete the declined friend request
+      const deletedRequest = await tx
+        .delete(friendships)
+        .where(eq(friendships.id, id))
+        .returning();
 
-    return deletedRequest[0];
+      return deletedRequest[0];
+    });
   })
 
   // Get pending friend requests for the user
@@ -332,32 +335,34 @@ export const friendshipRoutes = new Elysia()
 
       const { id } = params;
 
-      // Check if the friendship exists and user is part of it (with "accepted" status)
-      const friendship = await db
-        .select()
-        .from(friendships)
-        .where(
-          and(
-            eq(friendships.id, id),
-            or(
-              eq(friendships.requesterId, user.id),
-              eq(friendships.addresseeId, user.id)
-            ),
-            eq(friendships.status, "accepted")
+      return await db.transaction(async (tx) => {
+        // Check if the friendship exists and user is part of it (with "accepted" status)
+        const friendship = await tx
+          .select()
+          .from(friendships)
+          .where(
+            and(
+              eq(friendships.id, id),
+              or(
+                eq(friendships.requesterId, user.id),
+                eq(friendships.addresseeId, user.id)
+              ),
+              eq(friendships.status, "accepted")
+            )
           )
-        )
-        .limit(1);
+          .limit(1);
 
-      if (!friendship.length) {
-        throw new Error(
-          "Friendship not found or you don't have permission to remove it."
-        );
-      }
+        if (!friendship.length) {
+          throw new Error(
+            "Friendship not found or you don't have permission to remove it."
+          );
+        }
 
-      // Delete the friendship from the database
-      await db.delete(friendships).where(eq(friendships.id, id));
+        // Delete the friendship from the database
+        await tx.delete(friendships).where(eq(friendships.id, id));
 
-      return { success: true };
+        return { success: true };
+      });
     },
     {
       params: t.Object({
