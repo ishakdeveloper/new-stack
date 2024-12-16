@@ -1,4 +1,4 @@
-defmodule WS.Chat do
+defmodule WS.Workers.Chat do
   use GenServer
   require Logger
 
@@ -16,7 +16,7 @@ defmodule WS.Chat do
   ## REGISTRY AND SUPERVISION BOILERPLATE
   ########################################################################
 
-  defp via_tuple(user_id), do: {:via, Registry, {WS.ChatRegistry, user_id}}
+  defp via_tuple(user_id), do: {:via, Registry, {WS.Workers.ChatRegistry, user_id}}
 
   defp cast(user_id, params), do: GenServer.cast(via_tuple(user_id), params)
   defp call(user_id, params), do: GenServer.call(via_tuple(user_id), params)
@@ -29,7 +29,7 @@ defmodule WS.Chat do
     callers = [self() | Process.get(:"$callers", [])]
     guild_id = Map.get(initial_values, :guild_id)
 
-    case DynamicSupervisor.start_child(WS.ChatSupervisor, {__MODULE__, Map.merge(initial_values, %{callers: callers})}) do
+    case DynamicSupervisor.start_child(WS.Workers.Supervisors.ChatSupervisor, {__MODULE__, Map.merge(initial_values, %{callers: callers})}) do
       {:ok, pid} ->
         # ensures that the chat dies alongside the guild
         Process.link(pid)
@@ -49,7 +49,7 @@ defmodule WS.Chat do
   def child_spec(init) when is_list(init), do: child_spec(Map.new(init))
   def child_spec(init) when is_map(init), do: %{super(init) | id: Map.get(init, :guild_id)}
 
-  def count, do: Registry.count(WS.ChatRegistry)
+  def count, do: Registry.count(WS.Workers.ChatRegistry)
 
   defp log_state_change(action, %State{guild_id: guild_id, user_ids: user_ids} = state) do
     Logger.info("""
@@ -80,7 +80,7 @@ defmodule WS.Chat do
   end
 
   def kill(guild_id) do
-    WS.ChatRegistry
+    WS.Workers.ChatRegistry
       |> Registry.lookup(guild_id)
       |> Enum.each(fn {guild_pid, _} ->
         Process.exit(guild_pid, :kill)
@@ -89,7 +89,7 @@ defmodule WS.Chat do
 
   def ws_fan(user_ids, message) do
     Enum.each(user_ids, fn user_id ->
-      WS.UserSession.send_ws(user_id, message)
+      WS.Workers.UserSession.send_ws(user_id, message)
     end)
   end
 
@@ -121,7 +121,7 @@ defmodule WS.Chat do
     Logger.debug("Sending message to guild: #{inspect(payload)}")
     # Send to all users in guild
     Enum.each(state.user_ids, fn user_id ->
-      WS.UserSession.send_ws(user_id, payload)
+      WS.Workers.UserSession.send_ws(user_id, payload)
     end)
 
     {:noreply, state}

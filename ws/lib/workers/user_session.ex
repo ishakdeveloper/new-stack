@@ -1,4 +1,4 @@
-defmodule WS.UserSession do
+defmodule WS.Workers.UserSession do
   use GenServer
   require Logger
 
@@ -25,7 +25,7 @@ defmodule WS.UserSession do
     GenServer.start_link(__MODULE__, init, name: via_tuple(init[:user_id]))
   end
 
-  def via_tuple(user_id), do: {:via, Registry, {WS.UserSessionRegistry, user_id}}
+  def via_tuple(user_id), do: {:via, Registry, {WS.Workers.UserSessionRegistry, user_id}}
 
   defp cast(user_id, message), do: GenServer.cast(via_tuple(user_id), message)
   defp call(user_id, message), do: GenServer.call(via_tuple(user_id), message)
@@ -54,7 +54,7 @@ defmodule WS.UserSession do
     user_id = Keyword.get(initial_values, :user_id)
 
     case DynamicSupervisor.start_child(
-      WS.UserSessionSupervisor,
+      WS.Workers.Supervisors.UserSessionSupervisor,
       {__MODULE__, Keyword.merge(initial_values, callers: callers)}
     ) do
       {:ok, _pid} ->
@@ -96,7 +96,7 @@ defmodule WS.UserSession do
   end
 
   defp send_ws_impl(payload, %State{pid: pid} = state) do
-    if pid, do: WS.SocketHandler.remote_send(pid, payload)
+    if pid, do: WS.Message.SocketHandler.remote_send(pid, payload)
     {:noreply, state}
   end
 

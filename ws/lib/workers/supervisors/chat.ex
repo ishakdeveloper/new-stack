@@ -1,4 +1,4 @@
-defmodule WS.ChatSupervisor do
+defmodule WS.Workers.Supervisors.ChatSupervisor do
   use Supervisor
   require Logger
 
@@ -9,8 +9,8 @@ defmodule WS.ChatSupervisor do
 
   def init(init_arg) do
     children = [
-      {Registry, keys: :unique, name: WS.ChatRegistry},
-      {DynamicSupervisor, name: WS.ChatSupervisor, strategy: :one_for_one}
+      {Registry, keys: :unique, name: WS.Workers.ChatRegistry},
+      {DynamicSupervisor, name: WS.Workers.Supervisors.ChatSupervisor, strategy: :one_for_one}
     ]
 
     Supervisor.init(children, strategy: :one_for_one)

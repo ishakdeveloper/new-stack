@@ -1,4 +1,4 @@
-defmodule Ws do
+defmodule WS do
  @moduledoc false
  use Plug.Router
 

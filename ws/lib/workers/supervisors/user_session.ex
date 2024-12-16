@@ -1,4 +1,4 @@
-defmodule WS.UserSessionSupervisor do
+defmodule WS.Workers.Supervisors.UserSessionSupervisor do
   use DynamicSupervisor
   require Logger
 
@@ -16,8 +16,8 @@ defmodule WS.UserSessionSupervisor do
     Logger.debug("Initializing Session supervisor")
 
     children = [
-      {Registry, keys: :unique, name: WS.UserSessionRegistry},
-      {DynamicSupervisor, name: WS.UserSessionSupervisor, strategy: :one_for_one}
+      {Registry, keys: :unique, name: WS.Workers.UserSessionRegistry},
+      {DynamicSupervisor, name: WS.Workers.Supervisors.UserSessionSupervisor, strategy: :one_for_one}
     ]
 
     Supervisor.init(children, strategy: :one_for_one)

@@ -1,4 +1,4 @@
-defmodule WS.ChannelSupervisor do
+defmodule WS.Workers.Supervisors.ChannelSupervisor do
   use DynamicSupervisor
   require Logger
 

@@ -1,4 +1,4 @@
-defmodule WS.GuildSessionSupervisor do
+defmodule WS.Workers.Supervisors.GuildSessionSupervisor do
   use DynamicSupervisor
   require Logger
 
@@ -10,8 +10,8 @@ defmodule WS.GuildSessionSupervisor do
   @impl true
   def init(_init_arg) do
     children = [
-      {Registry, keys: :unique, name: WS.GuildSessionRegistry},
-      {DynamicSupervisor, name: WS.GuildSessionSupervisor, strategy: :one_for_one}
+      {Registry, keys: :unique, name: WS.Workers.GuildSessionRegistry},
+      {DynamicSupervisor, name: WS.Workers.Supervisors.GuildSessionSupervisor, strategy: :one_for_one}
     ]
 
     Supervisor.init(children, strategy: :one_for_one)

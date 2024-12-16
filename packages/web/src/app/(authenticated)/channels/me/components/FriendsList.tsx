@@ -121,7 +121,7 @@ const FriendsList = () => {
       setFriendUsername("");
 
       sendMessage({
-        op: "friend_request",
+        op: "send_friend_request",
         to_user_id: data?.data?.addresseeId ?? "",
       });
     },

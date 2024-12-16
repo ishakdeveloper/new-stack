@@ -1,4 +1,4 @@
-defmodule WS.Channel do
+defmodule WS.Workers.Channel do
   use GenServer
   require Logger
 
@@ -12,7 +12,7 @@ defmodule WS.Channel do
   end
 
   defp via_tuple(channel_id) do
-    {:via, Registry, {WS.ChannelRegistry, channel_id}}
+    {:via, Registry, {WS.Workers.ChannelRegistry, channel_id}}
   end
 
   defp cast(channel_id, msg) do
@@ -24,15 +24,15 @@ defmodule WS.Channel do
 
   defp ws_fan(user_ids, msg) do
     Enum.each(user_ids, fn user_id ->
-      WS.UserSession.send_ws(user_id, msg)
+      WS.Workers.UserSession.send_ws(user_id, msg)
     end)
   end
 
   def start_channel(channel_id, user_ids) do
-    case Registry.lookup(WS.ChannelRegistry, channel_id) do
+    case Registry.lookup(WS.Workers.ChannelRegistry, channel_id) do
       [] ->
         case DynamicSupervisor.start_child(
-          WS.ChannelSupervisor,
+          WS.Workers.Supervisors.ChannelSupervisor,
           {__MODULE__, %{channel_id: channel_id, user_ids: user_ids}}
         ) do
           {:ok, pid} ->

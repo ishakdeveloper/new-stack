@@ -10,11 +10,12 @@ import React, {
   useRef,
 } from "react";
 import useWebSocket, { ReadyState } from "react-use-websocket";
+import { deflate } from "pako";
 
 // Define WebSocket message types
 type WebSocketMessage =
   | { op: "register"; user: any }
-  | { op: "friend_request"; to_user_id: string }
+  | { op: "send_friend_request"; to_user_id: string }
   | { op: "decline_friend_request"; to_user_id: string }
   | { op: "accept_friend_request"; to_user_id: string }
   | { op: "guild_destroyed"; guild_id: string }
@@ -32,7 +33,9 @@ type WebSocketMessage =
   | { op: "user_left_guild"; guild_id: string }
   | { op: "create_category"; guild_id: string }
   | { op: "delete_category"; guild_id: string }
+  | { op: "update_category"; guild_id: string }
   | { op: "create_channel"; guild_id: string }
+  | { op: "delete_channel"; guild_id: string }
   | { op: "ping" }
   | { op: "send_private_message"; to_user_id: string }
   | { op: "create_group"; group_id: string; user_ids: string[] };
@@ -84,7 +87,12 @@ export const SocketProvider: React.FC<{
   const sendMessage = useCallback(
     (message: WebSocketMessage) => {
       if (isConnected) {
-        sendRawMessage(JSON.stringify(message));
+        // Convert message to JSON string
+        const jsonStr = JSON.stringify(message);
+        // Compress using zlib
+        const compressed = deflate(jsonStr);
+        // Send compressed binary data
+        sendRawMessage(compressed);
       } else {
         console.warn("WebSocket is not connected. Cannot send message.");
       }
