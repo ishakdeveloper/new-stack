@@ -14,6 +14,7 @@ import { useChatStore } from "@/stores/useChatStore";
 import GroupMembers from "./GroupMembers";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
+import { SelectGroupMembers } from "../../components/SelectGroupMembers";
 const PrivateChatbox = ({ slug }: { slug: string }) => {
   const [userInput, setUserInput] = useState("");
   const queryClient = useQueryClient();
@@ -150,10 +151,6 @@ const PrivateChatbox = ({ slug }: { slug: string }) => {
     }
   }, [lastMessage]);
 
-  const handleAddMembers = () => {
-    console.log("Add members");
-  };
-
   const handleLeaveGroup = async () => {
     await leaveGroupMutation.mutate();
   };
@@ -171,9 +168,10 @@ const PrivateChatbox = ({ slug }: { slug: string }) => {
           <div className="flex items-center gap-2">
             {conversation?.isGroup && (
               <>
-                <Button variant="ghost" size="icon" onClick={handleAddMembers}>
-                  <UserPlus className="h-5 w-5" />
-                </Button>
+                <SelectGroupMembers
+                  isCreateGroup={false}
+                  icon={<UserPlus className="h-5 w-5" />}
+                />
                 <Button variant="ghost" size="icon" onClick={handleLeaveGroup}>
                   <LogOut className="h-5 w-5" />
                 </Button>

@@ -185,3 +185,23 @@ defmodule WS.Workers.Guild do
   def handle_cast({:leave_guild, user_id}, state), do: leave_guild_impl(user_id, state)
   def handle_cast({:destroy, user_id}, state), do: destroy_impl(user_id, state)
 end
+
+defmodule WS.Workers.Supervisors.GuildSessionSupervisor do
+  use DynamicSupervisor
+  require Logger
+
+  def start_link(init_arg) do
+    Logger.debug("Starting Guild supervisor")
+    Supervisor.start_link(__MODULE__, init_arg)
+  end
+
+  @impl true
+  def init(_init_arg) do
+    children = [
+      {Registry, keys: :unique, name: WS.Workers.GuildSessionRegistry},
+      {DynamicSupervisor, name: WS.Workers.Supervisors.GuildSessionSupervisor, strategy: :one_for_one}
+    ]
+
+    Supervisor.init(children, strategy: :one_for_one)
+  end
+end

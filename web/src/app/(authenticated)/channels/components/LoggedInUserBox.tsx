@@ -2,7 +2,7 @@
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import React from "react";
+import React, { useEffect } from "react";
 import { Settings } from "lucide-react";
 import Link from "next/link";
 import { authClient } from "@/utils/authClient";
@@ -17,11 +17,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useRouter } from "next/navigation";
 import { SettingsOverlay } from "@/app/components/SettingsOverlay";
+import { useSocket } from "@/providers/SocketProvider";
 
 export default function LoggedInUserBox() {
   const currentUser = useUserStore((state) => state.currentUser);
   const clearStore = useUserStore((state) => state.clearStore);
   const router = useRouter();
+  const { user } = useSocket();
 
   const handleLogout = () => {
     authClient.signOut({
@@ -38,9 +40,9 @@ export default function LoggedInUserBox() {
   return (
     <div className="p-4 border-t flex items-center">
       <Avatar className="h-8 w-8">
-        <AvatarFallback>{currentUser?.name?.[0] ?? "U"}</AvatarFallback>
+        <AvatarFallback>{user?.name?.[0] ?? "U"}</AvatarFallback>
       </Avatar>
-      <span className="ml-2 text-sm">{currentUser?.name}</span>
+      <span className="ml-2 text-sm">{user?.name}</span>
       <SettingsOverlay />
 
       <DropdownMenu>
@@ -49,7 +51,7 @@ export default function LoggedInUserBox() {
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuItem asChild>
-            <Link href={`/channels/me/${currentUser?.id}`}>My Profile</Link>
+            <Link href={`/channels/me/${user?.id}`}>My Profile</Link>
           </DropdownMenuItem>
           <DropdownMenuItem asChild>
             <Link href="/channels/me/settings">User Settings</Link>

@@ -1,4 +1,75 @@
 defmodule WS.Message.Auth.StartSession do
+  use WS.Message.Call, needs_auth: false
+
+  @primary_key false
+  embedded_schema do
+    field :user_id, :string
+    field :name, :string
+    field :email, :string
+    field :email_verified, :boolean
+    field :image, :string
+    field :banner, :string
+    field :bio, :string
+    field :nickname, :string
+    field :created_at, :utc_datetime
+    field :updated_at, :utc_datetime
+  end
+
+  @type t :: %__MODULE__{
+    user_id: String.t(),
+    name: String.t(),
+  }
+
+  alias WS.Utils.UUID
+
+  @impl true
+  def changeset(initializer \\ %__MODULE__{}, data) do
+    initializer
+    |> cast(data, [:user_id, :name])
+    |> validate_required([:user_id, :name])
+    |> UUID.normalize(:user_id)
+  end
+
+  defmodule Reply do
+    use WS.Message.Push
+
+    @derive {Jason.Encoder, only: ~w(
+      id
+      name
+      email
+      email_verified
+      image
+      banner
+      bio
+      nickname
+      created_at
+      updated_at
+    )a}
+
+    @primary_key {:id, :binary_id, []}
+    schema "users" do
+      field(:name, :string)
+      field(:email, :string)
+      field(:email_verified, :boolean)
+      field(:image, :string)
+      field(:banner, :string)
+      field(:bio, :string)
+      field(:nickname, :string)
+      field(:created_at, :utc_datetime)
+      field(:updated_at, :utc_datetime)
+    end
+  end
+
+  @impl true
+  def execute(changeset, state) do
+    with {:ok, request} <- apply_action(changeset, :validate),
+         {:ok, user} <- start_session(request.params, state) do
+      {:reply, user, %{state | user: user}}
+    else
+      _ -> {:close, 4001, "Invalid request"}
+    end
+  end
+
   alias WS.Workers.UserSession
   require Logger
 
@@ -8,11 +79,7 @@ defmodule WS.Message.Auth.StartSession do
     with {:ok, valid_user_data} <- validate_user_data(user_data) do
       user = %WS.User{
         id: valid_user_data["id"],
-        name: valid_user_data["name"],
-        email: valid_user_data["email"],
-        image: valid_user_data["image"],
-        created_at: valid_user_data["createdAt"],
-        updated_at: valid_user_data["updatedAt"]
+        name: valid_user_data["name"]
       }
 
       updated_state = %{state | user: user}
@@ -36,10 +103,6 @@ defmodule WS.Message.Auth.StartSession do
   defp validate_user_data(%{
     "id" => _id,
     "name" => _name,
-    "email" => _email,
-    "emailVerified" => _email_verified,
-    "createdAt" => _created_at,
-    "updatedAt" => _updated_at
     } = user_data) do
     {:ok, user_data}
   end

@@ -18,6 +18,7 @@ import { client } from "@/utils/client";
 import { authClient } from "@/utils/authClient";
 import { Icons } from "@/components/ui/icons";
 import { useSocket } from "@/providers/SocketProvider";
+import { useChatStore } from "@/stores/useChatStore";
 
 interface Friend {
   id: string;
@@ -27,7 +28,13 @@ interface Friend {
   friendshipId: string;
 }
 
-export function CreateGroupPopover() {
+export function SelectGroupMembers({
+  isCreateGroup = false,
+  icon = <Plus className="h-4 w-4" />,
+}: {
+  isCreateGroup?: boolean;
+  icon?: React.ReactNode;
+}) {
   const [open, setOpen] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState("");
   const [selectedFriends, setSelectedFriends] = React.useState<Friend[]>([]);
@@ -70,6 +77,36 @@ export function CreateGroupPopover() {
     },
   });
 
+  const currentChatId = useChatStore((state) => state.currentChatId);
+
+  const addMembersMutation = useMutation({
+    mutationFn: async () => {
+      const friends = await client.api
+        .conversations({ id: currentChatId })
+        .members.post({
+          conversationId: currentChatId,
+          memberIds: [
+            session.data?.user.id ?? "",
+            ...selectedFriends.map((f) => f.id),
+          ],
+        });
+      return friends.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["conversations", session.data?.user.id],
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: ["messages", currentChatId],
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: ["dmUsers", currentChatId],
+      });
+    },
+  });
+
   const filteredFriends = React.useMemo(() => {
     if (!friends) return [];
     return friends.filter((friend) =>
@@ -94,6 +131,11 @@ export function CreateGroupPopover() {
     setOpen(false);
   };
 
+  const handleAddMembers = () => {
+    addMembersMutation.mutate();
+    setOpen(false);
+  };
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -102,7 +144,7 @@ export function CreateGroupPopover() {
           size="icon"
           className="h-[32px] w-[32px] rounded-full"
         >
-          <Plus className="h-4 w-4" />
+          {icon}
           <span className="sr-only">Add friend to direct message</span>
         </Button>
       </PopoverTrigger>
@@ -180,22 +222,40 @@ export function CreateGroupPopover() {
         <div className="p-4 bg-muted/50">
           <div className="mb-2 text-sm text-muted-foreground text-center">
             {selectedFriends.length < 2
-              ? `Select at least 2 friends (${selectedFriends.length}/2)`
+              ? isCreateGroup
+                ? `Select at least 2 friends (${selectedFriends.length}/2)`
+                : `Select at least 1 friend (${selectedFriends.length}/1)`
               : `${selectedFriends.length} friends selected`}
           </div>
-          <Button
-            onClick={handleCreateGroup}
-            className="w-full"
-            disabled={
-              selectedFriends.length < 2 || createGroupMutation.isPending
-            }
-          >
-            {createGroupMutation.isPending ? (
-              <Icons.spinner className="h-4 w-4 animate-spin" />
-            ) : (
-              "Create Group DM"
-            )}
-          </Button>
+          {isCreateGroup ? (
+            <Button
+              onClick={handleCreateGroup}
+              className="w-full"
+              disabled={
+                selectedFriends.length < 2 || createGroupMutation.isPending
+              }
+            >
+              {createGroupMutation.isPending ? (
+                <Icons.spinner className="h-4 w-4 animate-spin" />
+              ) : (
+                "Create Group DM"
+              )}
+            </Button>
+          ) : (
+            <Button
+              onClick={handleAddMembers}
+              className="w-full"
+              disabled={
+                selectedFriends.length < 1 || addMembersMutation.isPending
+              }
+            >
+              {addMembersMutation.isPending ? (
+                <Icons.spinner className="h-4 w-4 animate-spin" />
+              ) : (
+                "Add Member"
+              )}
+            </Button>
+          )}
         </div>
       </PopoverContent>
     </Popover>

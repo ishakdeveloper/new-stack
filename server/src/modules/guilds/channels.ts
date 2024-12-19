@@ -1,10 +1,10 @@
 import Elysia, { t } from "elysia";
-import { userMiddleware } from "../middlewares/userMiddleware";
-import { categories, guildMembers, guilds } from "../database/schema";
+import { userMiddleware } from "@/middlewares/userMiddleware";
+import { categories, guildMembers, guilds } from "@/database/schema";
 import { and, eq, isNull } from "drizzle-orm";
-import { channels } from "../database/schema";
-import db from "../database/db";
-import { generateChannelSlug } from "../lib/generateChannelSlug";
+import { channels } from "@/database/schema";
+import db from "@/database/db";
+import { generateChannelSlug } from "@/lib/generateChannelSlug";
 
 export const channelRoutes = new Elysia()
   .derive((context) => userMiddleware(context))

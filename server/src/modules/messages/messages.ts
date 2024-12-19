@@ -1,19 +1,11 @@
 import Elysia, { t } from "elysia";
-import { userMiddleware } from "../middlewares/userMiddleware";
-import db from "../database/db";
-import { messages, guildMembers } from "../database/schema";
+import { userMiddleware } from "@/middlewares/userMiddleware";
+import db from "@/database/db";
+import { messages, guildMembers } from "@/database/schema";
 import { eq, sql, desc } from "drizzle-orm";
-import { user as UserTable } from "../database/schema/auth";
+import { user as UserTable } from "@/database/schema/auth";
 
-export const directMessageRoutes = new Elysia().derive((context) =>
-  userMiddleware(context)
-);
-
-export const groupDmRoutes = new Elysia()
-  .derive((context) => userMiddleware(context))
-  .group("/dms/group", (app) => app);
-
-export const guildChannelRoutes = new Elysia()
+const guildMessageChannelRoutes = new Elysia()
   .derive((context) => userMiddleware(context))
   // Send a message in a Guild Channel
   .post(
@@ -117,3 +109,5 @@ export const guildChannelRoutes = new Elysia()
       }),
     }
   );
+
+export { guildMessageChannelRoutes };

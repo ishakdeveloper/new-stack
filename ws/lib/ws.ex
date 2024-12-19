@@ -1,31 +1,39 @@
 defmodule WS do
- @moduledoc false
- use Plug.Router
+  @moduledoc false
+  import Plug.Conn
+  use Plug.Router
 
- plug :match
- plug :dispatch
+  @type json :: String.t() | number | boolean | nil | [json] | %{String.t() => json}
 
- get "/" do
-   send_resp(conn, 200, "Welcome to the WebSocket server!")
+  plug(:set_callers)
+
+  defp get_callers(%Plug.Conn{req_headers: req_headers}) do
+    {_, request_bin} = Enum.find(req_headers, fn {key, _} -> key == "user-agent" end)
+
+    List.wrap(
+      if is_binary(request_bin) do
+        request_bin
+        |> Base.decode16!()
+        |> :erlang.binary_to_term()
+      end
+    )
+  end
+
+  defp set_callers(conn, _params) do
+    Process.put(:"$callers", get_callers(conn))
+    conn
+  end
+
+  plug WS.Metric.PrometheusExporter
+
+  plug :match
+  plug :dispatch
+
+  options _ do
+    send_resp(conn, 200, "")
   end
 
   match _ do
     send_resp(conn, 404, "Not Found")
   end
-end
-
-defmodule WS.User do
-  @moduledoc """
-  Represents a user in the system.
-  """
-  defstruct [:id, :name, :email, :image, :created_at, :updated_at]
-
-  @type t :: %__MODULE__{
-          id: String.t(),
-          name: String.t(),
-          email: String.t(),
-          image: nil | String.t(),
-          created_at: DateTime.t(),
-          updated_at: DateTime.t()
-        }
 end

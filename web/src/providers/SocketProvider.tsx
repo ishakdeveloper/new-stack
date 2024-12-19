@@ -8,47 +8,19 @@ import React, {
   useCallback,
   useState,
   useRef,
+  useMemo,
 } from "react";
 import useWebSocket, { ReadyState } from "react-use-websocket";
 import pako from "pako";
-
-// Define WebSocket message types
-type WebSocketMessage =
-  | { op: "register"; user: any }
-  | { op: "send_friend_request"; to_user_id: string }
-  | { op: "decline_friend_request"; to_user_id: string }
-  | { op: "accept_friend_request"; to_user_id: string }
-  | { op: "guild_destroyed"; guild_id: string }
-  | { op: "chat_message"; guild_id: string; content: string }
-  | { op: "delete_message"; guild_id: string; message_id: string }
-  | {
-      op: "update_message";
-      guild_id: string;
-      message_id: string;
-      content: string;
-    }
-  | { op: "join_guild"; guild_id: string }
-  | { op: "leave_guild"; guild_id: string }
-  | { op: "user_joined_guild"; guild_id: string }
-  | { op: "user_left_guild"; guild_id: string }
-  | { op: "create_category"; guild_id: string }
-  | { op: "delete_category"; guild_id: string }
-  | { op: "update_category"; guild_id: string }
-  | { op: "create_channel"; guild_id: string }
-  | { op: "delete_channel"; guild_id: string }
-  | { op: "ping" }
-  | { op: "send_private_message"; to_user_id: string }
-  | { op: "send_group_message"; group_id: string }
-  | { op: "create_group"; group_id: string; user_ids: string[] }
-  | { op: "join_group"; group_id: string }
-  | { op: "leave_group"; group_id: string }
-  | { op: "add_members"; group_id: string; user_ids: string[] }
-  | { op: "remove_members"; group_id: string; user_ids: string[] };
+import { User } from "better-auth/types";
+import { WebSocketMessage } from "@/types/WebSocketMessage";
 
 type SocketContextType = {
   sendMessage: (message: WebSocketMessage) => void;
   lastMessage: MessageEvent<any> | null;
   isConnected: boolean;
+  setUser: (user: User | null) => void;
+  user: User | null;
 };
 
 const SocketContext = createContext<SocketContextType | undefined>(undefined);
@@ -57,77 +29,129 @@ export const SocketProvider: React.FC<{
   children: React.ReactNode;
   session: Session | null;
 }> = ({ children, session }) => {
-  const socketUrl =
-    "ws://localhost:4001/ws?compression=zlib_json&encoding=json";
+  const socketUrl = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:4001/ws";
   const [shouldConnect, setShouldConnect] = useState(false);
   const hasRegistered = useRef(false);
   const wasConnected = useRef(false);
-  const [lastMessage, setLastMessage] = useState<MessageEvent<any> | null>(
+  const [lastMessage, setLastMessage] = useState<MessageEvent<{
+    op: string;
+    p: any;
+  }> | null>(null);
+  const lastPongRef = useRef<number>(Date.now());
+  const [user, setUser] = useState<User | null>(null);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   );
-  const lastPongRef = useRef<number>(Date.now());
+  const pingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const socketUrlWithParams = useMemo(() => {
+    const url = new URL(`${socketUrl}`);
+    url.searchParams.append("compression", "zlib_json");
+    url.searchParams.append("encoding", "json");
+    if (session?.user?.id) {
+      url.searchParams.append("user_id", session.user.id);
+    }
+    return url.toString();
+  }, [socketUrl, session?.user?.id]);
 
   const {
     sendMessage: sendRawMessage,
     lastMessage: rawMessage,
     readyState,
-  } = useWebSocket(socketUrl, {
-    shouldReconnect: () => true,
-    reconnectInterval: 0, // Set to 0 for immediate reconnection
-    retryOnError: true,
-    onOpen: () => console.log("WebSocket connection opened"),
-    onClose: () => {
-      console.log("WebSocket connection closed");
-      hasRegistered.current = false;
+  } = useWebSocket(socketUrlWithParams, {
+    shouldReconnect: (closeEvent) => true,
+    reconnectInterval: 3000,
+    onOpen: () => {
+      console.log("WebSocket Connected");
+      // Send auth message when connection opens
+      if (session?.user) {
+        sendRawMessage(
+          JSON.stringify({
+            op: "auth:login",
+            p: { user: session.user },
+          })
+        );
+      }
     },
-    onError: (event) => console.error("WebSocket error:", event),
-    share: true,
+    onClose: () => {
+      console.log("WebSocket Disconnected");
+    },
+    onError: (error) => {
+      console.error("WebSocket Error:", error);
+    },
     onMessage: (event) => {
+      console.log("Raw WebSocket message received:", event);
       try {
         if (event.data instanceof Blob) {
-          // Handle blob data
           event.data.arrayBuffer().then((buffer) => {
-            // Decompress using pako
-            const decompressed = pako.inflate(new Uint8Array(buffer), {
-              to: "string",
-            });
-            // Parse the JSON string
-            const parsed = JSON.parse(decompressed);
-            if (parsed === "pong") {
-              lastPongRef.current = Date.now();
-              return;
+            try {
+              const decompressed = pako.inflate(new Uint8Array(buffer), {
+                to: "string",
+              });
+              console.log("Decompressed message:", decompressed);
+
+              if (decompressed === "pong") {
+                lastPongRef.current = Date.now();
+                return;
+              }
+
+              const parsed = JSON.parse(decompressed);
+              console.log("Parsed message:", parsed);
+              setLastMessage(new MessageEvent("message", { data: parsed }));
+            } catch (error) {
+              console.error("Error processing binary message:", error);
             }
-            setLastMessage(new MessageEvent("message", { data: parsed }));
           });
         } else {
-          // Handle regular text messages
+          console.log("Text message received:", event.data);
           if (event.data === "pong") {
             lastPongRef.current = Date.now();
             return;
           }
-          setLastMessage(event);
+          try {
+            const parsed = JSON.parse(event.data);
+            console.log("Parsed text message:", parsed);
+            setLastMessage(new MessageEvent("message", { data: parsed }));
+          } catch (e) {
+            console.error("Error parsing text message:", e);
+          }
         }
       } catch (error) {
-        console.error("Error processing websocket message:", error);
+        console.error("Error in onMessage handler:", error);
       }
     },
   });
 
   const isConnected = readyState === ReadyState.OPEN;
 
-  // Register user session in elixir websocket server
+  // Register user session when connection is established
   useEffect(() => {
     if (isConnected && session && !hasRegistered.current) {
-      sendMessage({ op: "register", user: session.user });
+      setUser(session.user);
       hasRegistered.current = true;
     }
   }, [isConnected, session]);
 
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (pingIntervalRef.current) {
+        clearInterval(pingIntervalRef.current);
+      }
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const sendMessage = useCallback(
     (message: WebSocketMessage) => {
       if (isConnected) {
-        // Convert message to JSON string and send
-        sendRawMessage(JSON.stringify(message));
+        const jsonString = JSON.stringify(message);
+        // Compress the message using zlib
+        const compressed = pako.deflate(jsonString);
+        // Send as binary data
+        sendRawMessage(compressed);
       } else {
         console.warn("WebSocket is not connected. Cannot send message.");
       }
@@ -135,29 +159,46 @@ export const SocketProvider: React.FC<{
     [sendRawMessage, isConnected]
   );
 
+  // Monitor connection health
   useEffect(() => {
-    let heartbeatInterval: NodeJS.Timeout | null = null;
+    const checkConnection = () => {
+      const now = Date.now();
+      if (isConnected && now - lastPongRef.current > 45000) {
+        console.warn("No pong received in 45 seconds, reconnecting...");
+        // Force reconnection
+        window.location.reload();
+      }
+    };
 
-    if (isConnected) {
-      // Send a "ping" message every 5 seconds
-      heartbeatInterval = setInterval(() => {
-        // Check if we haven't received a pong in more than 15 seconds
-        if (Date.now() - lastPongRef.current > 15000) {
-          console.warn(
-            "No pong received in 15 seconds, connection may be stale"
-          );
-        }
-        sendMessage({ op: "ping" });
-      }, 5000) as unknown as NodeJS.Timeout;
-    }
+    const connectionMonitor = setInterval(checkConnection, 5000);
 
     return () => {
-      if (heartbeatInterval) clearInterval(heartbeatInterval);
+      clearInterval(connectionMonitor);
     };
-  }, [isConnected, sendMessage]);
+  }, [isConnected]);
+
+  // Log all messages from server
+  useEffect(() => {
+    if (lastMessage) {
+      console.log("Processed WebSocket message:", lastMessage.data);
+      // Handle specific message types here if needed
+      if (lastMessage.data.op === "auth:success") {
+        console.log("Auth success:", lastMessage);
+        setUser(lastMessage.data.p);
+      }
+    }
+  }, [lastMessage]);
+
+  // Add connection status logging
+  useEffect(() => {
+    const states = ["CONNECTING", "OPEN", "CLOSING", "CLOSED"];
+    console.log("WebSocket state changed:", states[readyState]);
+  }, [readyState]);
 
   return (
-    <SocketContext.Provider value={{ sendMessage, lastMessage, isConnected }}>
+    <SocketContext.Provider
+      value={{ sendMessage, lastMessage, isConnected, user, setUser }}
+    >
       {children}
     </SocketContext.Provider>
   );

@@ -1,5 +1,5 @@
 import Elysia, { t } from "elysia";
-import { userMiddleware } from "../middlewares/userMiddleware";
+import { userMiddleware } from "../../middlewares/userMiddleware";
 import { and, eq } from "drizzle-orm";
 import {
   categories,
@@ -9,12 +9,12 @@ import {
   guildInviteLinks,
   guilds,
   messages,
-} from "../database/schema";
-import { guildMembers } from "../database/schema";
-import db from "../database/db";
-import { generateChannelSlug } from "../lib/generateChannelSlug";
-import { user } from "../database/schema/auth";
-import { generateInviteCode } from "../lib/generateInviteCode";
+} from "../../database/schema";
+import { guildMembers } from "../../database/schema";
+import db from "../../database/db";
+import { generateChannelSlug } from "../../lib/generateChannelSlug";
+import { user } from "../../database/schema/auth";
+import { generateInviteCode } from "../../lib/generateInviteCode";
 
 export const guildRoutes = new Elysia()
   .derive((context) => userMiddleware(context))

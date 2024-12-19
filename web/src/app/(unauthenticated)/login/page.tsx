@@ -33,12 +33,13 @@ export default function LoginScreen() {
     formState: { errors, isSubmitting },
   } = useForm<FormData>();
 
-  const onSubmit = async (data: FormData) => {
+  const onSubmit = async (data: FormData, e: React.FormEvent) => {
+    e.preventDefault();
     await authClient.signIn
       .email({
         email: data.email,
         password: data.password,
-        callbackURL: "/channels/me",
+        // callbackURL: "/channels/me",
       })
       .then((user) => {
         setCurrentUser({

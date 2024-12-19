@@ -137,3 +137,23 @@ defmodule WS.Workers.Channel do
   def handle_cast({:add_user, user_id}, state), do: add_user_impl(user_id, state)
   def handle_cast({:remove_user, user_id}, state), do: remove_user_impl(user_id, state)
 end
+
+defmodule WS.Workers.Supervisors.ChannelSupervisor do
+  use DynamicSupervisor
+  require Logger
+
+  def start_link(init_arg) do
+    Logger.debug("Starting Channel supervisor")
+    Supervisor.start_link(__MODULE__, init_arg)
+  end
+
+  @impl true
+  def init(_init_arg) do
+    children = [
+      {Registry, keys: :unique, name: WS.Workers.ChannelRegistry},
+      {DynamicSupervisor, name: WS.Workers.Supervisors.ChannelSupervisor, strategy: :one_for_one}
+    ]
+
+    Supervisor.init(children, strategy: :one_for_one)
+  end
+end

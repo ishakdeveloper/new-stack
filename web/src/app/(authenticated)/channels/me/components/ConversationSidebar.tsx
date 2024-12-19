@@ -15,7 +15,7 @@ import LoggedInUserBox from "../../components/LoggedInUserBox";
 import { useChatStore } from "@/stores/useChatStore";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { CreateGroupPopover } from "./CreateGroupPopover";
+import { SelectGroupMembers } from "./SelectGroupMembers";
 import { useSocket } from "@/providers/SocketProvider";
 import { useToast } from "@/hooks/use-toast";
 
@@ -144,7 +144,7 @@ const ConversationSidebar = () => {
           </NextLink>
           <div className="text-sm font-semibold mb-2 flex justify-between items-center px-2">
             <span>Direct Messages</span>
-            <CreateGroupPopover />
+            <SelectGroupMembers isCreateGroup={true} />
           </div>
           {conversations?.map((conversation) => (
             <button

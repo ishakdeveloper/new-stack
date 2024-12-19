@@ -22,9 +22,15 @@ defmodule Ws.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:cowboy, "~> 2.9"},
-      {:plug_cowboy, "~> 2.5"},
+      {:plug_cowboy, "~> 2.7"},
       {:jason, "~> 1.4"},
+      {:prometheus_ex, "~> 3.1"},
+      {:prometheus_plugs, "~> 1.1.5"},
+      {:ecto, "~> 3.10"},
+      {:ecto_enum, "~> 1.4"},
+      {:amqp, "~> 4.0.0"},
+      {:ranch, "~> 2.1.0", override: true},
+      {:phoenix_pubsub, "~> 2.1.3"}
     ]
   end
 end

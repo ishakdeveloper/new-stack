@@ -4,6 +4,8 @@ import db from "../database/db";
 import * as authSchema from "../database/schema/auth";
 import { openAPI } from "better-auth/plugins";
 import { v4 as uuidv4 } from "uuid";
+import { rabbitMQ } from "./rabbitmq";
+import { eq } from "drizzle-orm";
 
 export const auth = betterAuth({
   baseUrl: "http://localhost:4000/",
@@ -13,6 +15,33 @@ export const auth = betterAuth({
     provider: "pg",
     schema: authSchema,
   }),
+  databaseHooks: {
+    session: {
+      create: {
+        after: async (session) => {
+          const user = await db
+            .select()
+            .from(authSchema.user)
+            .where(eq(authSchema.user.id, session.userId));
+          if (!user) return;
+
+          const userAndSession = {
+            ...user,
+            session,
+          };
+
+          await rabbitMQ.publishEvent("auth:login", user);
+        },
+      },
+    },
+    user: {
+      create: {
+        after: async (user) => {
+          await rabbitMQ.publishEvent("auth:login", user);
+        },
+      },
+    },
+  },
   advanced: {
     generateId: () => {
       return uuidv4();
