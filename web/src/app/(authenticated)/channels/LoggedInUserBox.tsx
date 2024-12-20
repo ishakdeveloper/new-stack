@@ -1,9 +1,8 @@
 "use client";
 
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import React, { useEffect } from "react";
-import { Settings } from "lucide-react";
+import React from "react";
 import Link from "next/link";
 import { authClient } from "@/utils/authClient";
 import { useUserStore } from "@/stores/useUserStore";
@@ -23,7 +22,10 @@ export default function LoggedInUserBox() {
   const currentUser = useUserStore((state) => state.currentUser);
   const clearStore = useUserStore((state) => state.clearStore);
   const router = useRouter();
-  const { user } = useSocket();
+  const { user, isConnected } = useSocket();
+
+  // Use socket user if available, fallback to store user
+  const displayUser = user || currentUser;
 
   const handleLogout = () => {
     authClient.signOut({
@@ -40,9 +42,9 @@ export default function LoggedInUserBox() {
   return (
     <div className="p-4 border-t flex items-center">
       <Avatar className="h-8 w-8">
-        <AvatarFallback>{user?.name?.[0] ?? "U"}</AvatarFallback>
+        <AvatarFallback>{displayUser?.name?.[0] ?? "U"}</AvatarFallback>
       </Avatar>
-      <span className="ml-2 text-sm">{user?.name}</span>
+      <span className="ml-2 text-sm">{displayUser?.name}</span>
       <SettingsOverlay />
 
       <DropdownMenu>
@@ -51,7 +53,7 @@ export default function LoggedInUserBox() {
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuItem asChild>
-            <Link href={`/channels/me/${user?.id}`}>My Profile</Link>
+            <Link href={`/channels/me/${displayUser?.id}`}>My Profile</Link>
           </DropdownMenuItem>
           <DropdownMenuItem asChild>
             <Link href="/channels/me/settings">User Settings</Link>
@@ -61,6 +63,7 @@ export default function LoggedInUserBox() {
         </DropdownMenuContent>
       </DropdownMenu>
       <ModeToggle />
+      {!isConnected && <span className="text-red-500 ml-2">●</span>}
     </div>
   );
 }

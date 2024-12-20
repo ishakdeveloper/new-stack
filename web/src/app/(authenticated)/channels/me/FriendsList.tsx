@@ -28,6 +28,7 @@ import {
 import { useSocket } from "@/providers/SocketProvider";
 import { authClient } from "@/utils/authClient";
 import { useChatStore } from "@/stores/useChatStore";
+import { Opcodes } from "@/providers/SocketProvider";
 
 const FriendsList = () => {
   const [activeTab, setActiveTab] = useState<
@@ -36,10 +37,11 @@ const FriendsList = () => {
   const [friendUsername, setFriendUsername] = useState("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { sendMessage, lastMessage, isConnected } = useSocket(); // Use the useSocket hook
+  const { sendMessage, onMessage } = useSocket();
   const session = authClient.useSession();
   const setCurrentChatId = useChatStore((state) => state.setCurrentChatId);
   const setOneOnOnePartner = useChatStore((state) => state.setOneOnOnePartner);
+
   // Queries for fetching data
   const { data: friends, isLoading: loadingFriends } = useQuery({
     queryKey: ["friends"],
@@ -48,6 +50,7 @@ const FriendsList = () => {
       return data;
     },
   });
+
   const { data: pendingRequests, isLoading: loadingRequests } = useQuery({
     queryKey: ["pendingRequests"],
     queryFn: () => {
@@ -57,66 +60,62 @@ const FriendsList = () => {
   });
 
   useEffect(() => {
-    if (lastMessage) {
-      try {
-        // Handle the parsed data if it is a valid JSON message
-        if (
-          lastMessage.data.type === "friend_request" ||
-          lastMessage.data.type === "friend_request_declined" ||
-          lastMessage.data.type === "friend_request_accepted"
-        ) {
-          console.log("data", lastMessage.data);
-          queryClient.invalidateQueries({
-            queryKey: ["pendingRequests"],
-          });
-          queryClient.invalidateQueries({
-            queryKey: ["friends"],
-          });
+    // Listen for all friend-related events
+    const unsubscribeRequest = onMessage("friend_request_received", (data) => {
+      console.log("[Friends] Received friend request:", data);
+      queryClient.invalidateQueries({ queryKey: ["pendingRequests"] });
+    });
 
-          if (lastMessage.data.type === "friend_request") {
-            toast({
-              title: "New Friend Request",
-              description: `You received a friend request from ${lastMessage.data.username}`,
-            });
-          } else if (lastMessage.data.type === "friend_request_declined") {
-            toast({
-              title: "Friend Request Declined",
-              description: `${lastMessage.data.username} declined your friend request`,
-            });
-          } else if (lastMessage.data.type === "friend_request_accepted") {
-            queryClient.invalidateQueries({
-              queryKey: ["conversations"],
-            });
-            toast({
-              title: "Friend Request Accepted",
-              description: `${lastMessage.data.username} accepted your friend request`,
-            });
-          }
-        }
-      } catch (error) {
-        // Handle the error if parsing fails, for example log it or show a toast
-        console.error("Failed to parse message", error);
-      }
-    }
-  }, [lastMessage, queryClient, toast]);
+    const unsubscribeAccept = onMessage("friend_accept", (data) => {
+      console.log("[Friends] Friend added:", data);
+      queryClient.invalidateQueries({ queryKey: ["friends"] });
+      queryClient.invalidateQueries({ queryKey: ["pendingRequests"] });
+    });
+
+    const unsubscribeDecline = onMessage("friend_request_declined", (data) => {
+      console.log("[Friends] Friend request declined:", data);
+      queryClient.invalidateQueries({ queryKey: ["pendingRequests"] });
+    });
+
+    const unsubscribeRemove = onMessage("friend_removed", (data) => {
+      console.log("[Friends] Received friend_removed event");
+      console.log("[Friends] Event data:", data);
+      console.log("[Friends] Current user:", session?.data?.user?.id);
+
+      queryClient.invalidateQueries({
+        queryKey: ["friends"],
+        exact: true,
+      });
+    });
+
+    return () => {
+      unsubscribeRequest();
+      unsubscribeAccept();
+      unsubscribeDecline();
+      unsubscribeRemove();
+    };
+  }, [onMessage, queryClient, session?.data?.user?.id]);
+
   // Mutations for actions
   const sendRequestMutation = useMutation({
     mutationFn: () =>
       client.api.friendships.post({ addresseeName: friendUsername }),
     onSuccess: (data) => {
-      console.log("data", data);
-      queryClient.invalidateQueries({
-        queryKey: ["pendingRequests"],
-      }); // Refresh pending requests
+      queryClient.invalidateQueries({ queryKey: ["pendingRequests"] });
       toast({
         title: "Friend request sent!",
         description: "You can now wait for the user to accept your request.",
       });
       setFriendUsername("");
 
+      // Use correct opcode
       sendMessage({
-        op: "send_friend_request",
-        to_user_id: data?.data?.addresseeId ?? "",
+        op: Opcodes.FriendRequest,
+        d: {
+          to_user_id: data?.data?.addresseeId,
+          from_user_id: session?.data?.user?.id,
+          status: "pending",
+        },
       });
     },
     onError: () => {
@@ -129,16 +128,10 @@ const FriendsList = () => {
 
   const acceptFriendRequestMutation = useMutation({
     mutationFn: (id: string) => client.api.friendships({ id }).accept.patch(),
-    onSuccess: (data, id) => {
-      queryClient.invalidateQueries({
-        queryKey: ["pendingRequests"],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ["friends"],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ["conversations"],
-      });
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["pendingRequests"] });
+      queryClient.invalidateQueries({ queryKey: ["friends"] });
+      queryClient.invalidateQueries({ queryKey: ["conversations"] });
 
       toast({
         title: "Friend request accepted!",
@@ -146,29 +139,34 @@ const FriendsList = () => {
       });
 
       sendMessage({
-        op: "accept_friend_request",
-        to_user_id: data?.data?.friendship.requesterId ?? "",
+        op: Opcodes.FriendAccept,
+        d: {
+          to_user_id: data?.data?.friendship.requesterId,
+          from_user_id: data?.data?.friendship.addresseeId,
+          status: "accepted",
+        },
       });
     },
   });
 
   const declineFriendRequestMutation = useMutation({
     mutationFn: (id: string) => client.api.friendships({ id }).decline.patch(),
-    onSuccess: (data, id) => {
-      queryClient.invalidateQueries({
-        queryKey: ["pendingRequests"],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ["friends"],
-      });
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["pendingRequests"] });
+      queryClient.invalidateQueries({ queryKey: ["friends"] });
+
       toast({
         title: "Friend request declined!",
         description: "You will no longer receive updates from this user.",
       });
 
       sendMessage({
-        op: "decline_friend_request",
-        to_user_id: data?.data?.requesterId ?? "",
+        op: Opcodes.FriendDecline,
+        d: {
+          to_user_id: data?.data?.requesterId,
+          from_user_id: session?.data?.user?.id,
+          status: "declined",
+        },
       });
     },
   });
@@ -176,14 +174,38 @@ const FriendsList = () => {
   const removeFriendMutation = useMutation({
     mutationFn: (friendshipId: string) =>
       client.api.friendships({ id: friendshipId }).delete(),
-    onSuccess: () => {
+    onSuccess: (data, variables, context) => {
+      console.log("[Friends] Removing friend. FriendshipId:", variables);
+
+      // Find the friend's user ID from the friends list
+      const friend = friends?.data?.find((f) => f.friendshipId === variables);
+      if (!friend) {
+        console.error("[Friends] Could not find friend data for removal");
+        return;
+      }
+
+      console.log("[Friends] Found friend data:", friend);
+
       queryClient.invalidateQueries({
         queryKey: ["friends"],
       });
+
       toast({
         title: "Friend removed!",
         description: "You are no longer friends with this user.",
       });
+
+      // Send WebSocket notification with user ID instead of friendship ID
+      const message = {
+        op: Opcodes.FriendRemove,
+        d: {
+          friend_id: friend.id, // Use user ID instead of friendship ID
+          from_user_id: session?.data?.user?.id,
+        },
+      };
+
+      console.log("[Friends] Sending WebSocket message:", message);
+      sendMessage(message);
     },
   });
 

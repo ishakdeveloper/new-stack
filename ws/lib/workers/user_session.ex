@@ -8,12 +8,16 @@ defmodule WS.Workers.UserSession do
     @type t :: %__MODULE__{
             user_id: String.t(),
             pid: pid() | nil,
-            active_ws: pid() | nil
+            active_ws: pid() | nil,
+            current_channel_id: String.t() | nil,
+            presence: map()
           }
 
     defstruct user_id: nil,
               pid: nil,
-              active_ws: nil
+              active_ws: nil,
+              current_channel_id: nil,
+              presence: %{status: "offline"}
   end
 
   def child_spec(init) do
@@ -21,12 +25,13 @@ defmodule WS.Workers.UserSession do
   end
 
   def start_link(opts) do
-    user_id = Keyword.get(opts, :user_id)
-    name = via_tuple(user_id)
-    GenServer.start_link(__MODULE__, opts, name: name)
+    user_id = Keyword.fetch!(opts, :user_id)
+    GenServer.start_link(__MODULE__, opts, name: via_tuple(user_id))
   end
 
-  def via_tuple(user_id), do: {:via, Registry, {WS.Workers.UserSessionRegistry, user_id}}
+  def via_tuple(user_id) do
+    {:via, Registry, {WS.Workers.UserSessionRegistry, user_id}}
+  end
 
   def lookup(user_id), do: Registry.lookup(WS.Workers.UserSessionRegistry, user_id)
   def count, do: Registry.count(WS.Workers.UserSessionRegistry)
@@ -61,77 +66,45 @@ defmodule WS.Workers.UserSession do
 
   def set_state(user_id, info), do: cast(user_id, {:set_state, info})
   def set_active_ws(user_id, ws_pid) do
-    Logger.debug("Setting active WS for user #{user_id} to #{inspect(ws_pid)}")
-    if Process.alive?(ws_pid) do
-      :ets.insert(:ws_connections, {user_id, ws_pid})
-      Logger.debug("WebSocket connection registered in ETS")
-      # Verify the registration
-      case :ets.lookup(:ws_connections, user_id) do
-        [{^user_id, ^ws_pid}] ->
-          Logger.debug("WebSocket registration verified")
-          :ok
-        other ->
-          Logger.error("WebSocket registration failed. Found: #{inspect(other)}")
-          {:error, :registration_failed}
-      end
-    else
-      Logger.error("WebSocket process is not alive")
-      {:error, :dead_process}
-    end
+    GenServer.call(via_tuple(user_id), {:set_active_ws, ws_pid})
   end
 
   def send_ws(user_id, message) do
-    Logger.debug("Attempting to send message to user #{user_id}: #{inspect(message)}")
-
-    # Log ETS table contents for debugging
-    table_contents = :ets.tab2list(:ws_connections)
-    Logger.debug("Current WS connections: #{inspect(table_contents)}")
+    Logger.debug("Looking up WebSocket connection for user #{user_id}")
 
     case :ets.lookup(:ws_connections, user_id) do
-      [{^user_id, ws_pid}] when is_pid(ws_pid) ->
-        Logger.debug("Found WebSocket connection #{inspect(ws_pid)} for user #{user_id}")
-        if Process.alive?(ws_pid) do
-          Logger.debug("WebSocket process is alive, sending message")
-          try do
-            send(ws_pid, {:remote_send, message})
-            Logger.debug("Message sent successfully")
-            :ok
-          rescue
-            e ->
-              Logger.error("Failed to send message: #{inspect(e)}")
-              {:error, :send_failed}
-          end
+      [{^user_id, pid}] ->
+        Logger.debug("Found WebSocket connection #{inspect(pid)} for user #{user_id}")
+        if Process.alive?(pid) do
+          send(pid, {:remote_send, message})
+          :ok
         else
-          Logger.warn("WebSocket process is dead")
+          Logger.error("WebSocket connection found but process is dead for user #{user_id}")
           :ets.delete(:ws_connections, user_id)
           {:error, :dead_socket}
         end
       [] ->
         Logger.error("No WebSocket connection found for user #{user_id}")
         {:error, :no_socket}
-      other ->
-        Logger.error("Unexpected lookup result: #{inspect(other)}")
-        {:error, :unexpected_result}
     end
   end
 
+  def update_presence(user_id, presence), do: cast(user_id, {:update_presence, presence})
+  def get_presence(user_id), do: call(user_id, :get_presence)
+
   @impl true
   def init(opts) do
-    user_id = Keyword.get(opts, :user_id)
-    state = %State{
-      user_id: user_id,
-      active_ws: nil
-    }
+    user_id = Keyword.fetch!(opts, :user_id)
 
     Logger.info("""
     User Session State Change - Initial state
     ============================
-    User ID: #{inspect(state.user_id)}
-    Active WS: #{inspect(state.active_ws)}
+    User ID: #{inspect(user_id)}
+    Active WS: nil
     ============================
     """)
 
-    {:ok, state}
+    {:ok, %{user_id: user_id, active_ws: nil, previous_ws: nil}}
   end
 
   @impl true
@@ -163,15 +136,39 @@ defmodule WS.Workers.UserSession do
   end
 
   @impl true
-  def handle_call({:set_active_ws, pid}, _from, state) do
-    Logger.debug("Setting active WS to #{inspect(pid)} for user #{state.user_id}")
-    {:noreply, %{state | active_ws: pid}}
+  def handle_call({:set_active_ws, new_ws_pid}, _from, state) do
+    if state.active_ws && state.active_ws != new_ws_pid do
+      # Close previous connection if it exists and is different
+      Logger.debug("Closing previous WebSocket connection for user #{state.user_id}")
+      try do
+        Process.send(state.active_ws, :close, [])
+      catch
+        :error, :noproc -> :ok
+      end
+    end
+
+    Logger.debug("Setting active WS for user #{state.user_id} to #{inspect(new_ws_pid)}")
+
+    {:reply, :ok, %{state |
+      previous_ws: state.active_ws,
+      active_ws: new_ws_pid
+    }}
   end
 
   @impl true
   def handle_info({:DOWN, _ref, :process, pid, _reason}, %State{active_ws: pid} = state) do
     Logger.debug("WebSocket connection down: #{inspect(pid)}")
-    {:noreply, %{state | active_ws: nil}}
+
+    # Set presence to offline and update global Presence
+    presence = %{status: "offline"}
+    WS.Workers.Presence.update_presence(state.user_id, presence)
+
+    new_state = %{state |
+      active_ws: nil,
+      presence: presence
+    }
+    log_state_change("Connection down", new_state)
+    {:noreply, new_state}
   end
 
   def handle_info({:DOWN, _ref, :process, _pid, _reason}, state) do
@@ -187,8 +184,26 @@ defmodule WS.Workers.UserSession do
     end
     # Monitor the new connection
     Process.monitor(new_pid)
-    # Update state with new connection
-    {:noreply, %{state | active_ws: new_pid, pid: new_pid}}
+
+    # Set initial presence to online and update global Presence
+    presence = %{status: "online"}
+    WS.Workers.Presence.update_presence(state.user_id, presence)
+
+    new_state = %{state |
+      active_ws: new_pid,
+      pid: new_pid,
+      presence: presence
+    }
+    log_state_change("New connection", new_state)
+    {:noreply, new_state}
+  end
+
+  def handle_cast({:update_presence, presence}, state) do
+    # Update presence in both UserSession and global Presence
+    WS.Workers.Presence.update_presence(state.user_id, presence)
+    new_state = %{state | presence: presence}
+    log_state_change("Presence updated", new_state)
+    {:noreply, new_state}
   end
 
   # Helper function to log state changes with safe key access

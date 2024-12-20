@@ -9,7 +9,7 @@ defmodule WS.Application do
   def start(_type, _args) do
     import Supervisor.Spec, warn: false
 
-    :ets.new(:ws_connections, [:set, :public, :named_table])
+    :ets.new(:ws_connections, [:named_table, :public, :set])
 
     WS.Metric.PrometheusExporter.setup()
     WS.Metric.PipelineInstrumenter.setup()
@@ -24,8 +24,10 @@ defmodule WS.Application do
       WS.Workers.Supervisors.ChatSupervisor,
       WS.Workers.Supervisors.GuildSessionSupervisor,
       WS.Workers.Supervisors.ChannelSupervisor,
+      {WS.Workers.Presence, []},
       WS.Workers.Telemetry,
       {Plug.Cowboy, scheme: :http, plug: WS, options: [port: 4001, dispatch: dispatch(), protocol_options: [idle_timeout: :infinity]]},
+
     ]
 
     opts = [strategy: :one_for_one, name: WS.Supervisor]

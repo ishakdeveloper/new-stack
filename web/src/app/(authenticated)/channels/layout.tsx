@@ -1,5 +1,5 @@
 import React from "react";
-import ServerList from "./components/ServerList";
+import ServerList from "./ServerList";
 import {
   dehydrate,
   HydrationBoundary,

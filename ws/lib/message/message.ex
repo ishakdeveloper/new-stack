@@ -1,227 +1,164 @@
 defmodule WS.Message do
+  @moduledoc """
+  Defines the structure and validation for WebSocket messages.
+
+  Format (both directions):
+  {
+    "op": opcode_number,
+    "d": data_payload,
+    "s": sequence_number (optional),
+    "t": event_name (optional)
+  }
+  """
   use Ecto.Schema
   import Ecto.Changeset
   require Logger
 
   @primary_key false
   embedded_schema do
-    field :operator, WS.Message.Types.Operator, null: false
-    field :payload, :map
-    field :reference, :binary_id
-    field :inbound_operator, :string
-    field :version, :string
+    field :op, :integer
+    field :d, :map
+    field :s, :integer
+    field :t, :string
   end
 
   @type t :: %__MODULE__{
-          operator: module(),
-          payload: map(),
-          reference: WS.Utils.UUID.t(),
-          inbound_operator: String.t(),
-          version: String.t()
-        }
-
-  @spec changeset(%{String.t() => WS.json()}, WS.Message.SocketHandler.state()) :: Changeset.t()
-
-  @doc """
-  Primary validation function for all websocket messages.
-  """
-  def changeset(data, state) do
-    %__MODULE__{}
-    |> cast(data, [:inbound_operator])
-    |> Map.put(:params, data)
-    |> find(:operator)
-    |> find(:payload)
-    |> find(:reference, :optional)
-    |> cast_operator
-    |> cast_reference
-    |> cast_inbound_operator
-    |> cast_payload(state)
-    |> validate_calls_have_references
-    |> find(:version)
-    |> cast_version
-  end
-
-  @type message_field :: :operator | :payload | :reference
-
-  @valid_forms %{
-    operator: ~w(operator op),
-    payload: ~w(payload p d),
-    reference: ~w(reference ref fetchId),
-    version: ~w(version v)
+    op: integer(),
+    d: map(),
+    s: integer() | nil,
+    t: String.t() | nil
   }
 
-  defp find(changeset, field, optional \\ false)
-  defp find(changeset = %{valid?: false}, _, _), do: changeset
-
-  defp find(changeset, field, optional) when is_atom(field) do
-    find(changeset, field, @valid_forms[field], optional)
+  def changeset(data, _state) do
+    %__MODULE__{}
+    |> cast(data, [:op, :d, :s, :t])
+    |> validate_required([:op, :d])
+    |> validate_number(:op, greater_than_or_equal_to: 0)
   end
 
-  @spec find(Changeset.t(), message_field, [String.t()], :optional | false) :: Changeset.t()
-
-  defp find(changeset = %{params: params}, field, [form | _], _)
-       when is_map_key(params, form) do
-    %{changeset | params: Map.put(changeset.params, "#{field}", params[form])}
+  @doc """
+  Creates a message for sending to the client
+  """
+  def create(opcode, data, sequence \\ nil, event_type \\ nil) do
+    %{
+      op: opcode,
+      d: data,
+      s: sequence,
+      t: event_type
+    }
   end
 
-  defp find(changeset, field, [_ | rest], optional), do: find(changeset, field, rest, optional)
+  @doc """
+  Encodes and compresses a message for sending
+  """
+  def encode(message) when is_struct(message) do
+    # Get the module's opcode
+    opcode = message.__struct__.opcode()
 
-  defp find(changeset, field, [], optional) do
-    if optional do
-      changeset
+    # Get the event name if it exists
+    event_name = if function_exported?(message.__struct__, :event_name, 0) do
+      message.__struct__.event_name()
     else
-      add_error(changeset, field, "no #{field} present")
+      nil
+    end
+
+    # Build the message payload
+    payload = %{
+      "op" => opcode,
+      "d" => message,
+      "t" => event_name
+    }
+
+    Jason.encode!(payload)
+  end
+
+  # Handle map case (for heartbeat responses)
+  def encode(message) when is_map(message) do
+    # For non-struct messages, assume it's a simple response
+    payload = %{
+      "op" => :heartbeat_ack,
+      "d" => message,
+      "t" => nil
+    }
+
+    Jason.encode!(payload)
+  end
+
+  @doc """
+  Decodes and decompresses a received message
+  """
+  def decode(binary) do
+    with {:ok, decompressed} <- decompress(binary),
+         {:ok, decoded} <- Jason.decode(decompressed) do
+      {:ok, decoded}
     end
   end
 
-  ############################################################################
+  defp decompress(data) do
+    try do
+      {:ok, :zlib.uncompress(data)}
+    rescue
+      _ -> {:error, :decompression_failed}
+    end
+  end
 
-  @operators WS.Message.Manifest.actions()
+  def handle(message, state) when is_map(message) do
+    Logger.debug("Handling message: #{inspect(message)}")
 
-  defp cast_operator(changeset = %{valid?: false}), do: changeset
-
-  defp cast_operator(changeset = %{params: %{"operator" => op}}) do
-    if operator = @operators[op] do
-      changeset
-      |> put_change(:operator, operator)
-      |> put_change(:inbound_operator, op)
+    # Validate the message structure
+    with {:ok, validated} <- validate_payload(message),
+         {:ok, handler} <- get_handler(validated["op"]),
+         {:ok, changeset} <- create_changeset(handler, validated["d"]) do
+      # Execute the handler with the validated changeset
+      handler.execute(changeset, state)
     else
-      add_error(changeset, :operator, "#{op} is invalid")
+      {:error, reason} ->
+        Logger.error("Error handling message: #{inspect(reason)}")
+        {:error, reason}
     end
   end
 
-  defp cast_reference(changeset = %{valid?: false}), do: changeset
+  defp validate_payload(message) do
+    Logger.debug("Validating payload: #{inspect(message)}")
 
-  defp cast_reference(changeset = %{params: %{"reference" => reference}}) do
-    put_change(changeset, :reference, reference)
-  end
-
-  defp cast_reference(changeset), do: changeset
-
-  defp cast_inbound_operator(changeset) do
-    if get_field(changeset, :inbound_operator) do
-      changeset
-    else
-      inbound_operator = get_field(changeset, :operator)
-      put_change(changeset, :inbound_operator, inbound_operator)
+    case message do
+      %{"op" => op} when not is_nil(op) ->
+        Logger.debug("Payload valid with op: #{inspect(op)} and data: #{inspect(message["d"])}")
+        {:ok, message}
+      _ ->
+        {:error, :invalid_payload}
     end
   end
 
-  defp cast_payload(changeset = %{valid?: false}, _), do: changeset
+  defp get_handler(opcode) do
+    Logger.debug("Getting handler for opcode: #{inspect(opcode)}")
 
-  defp cast_payload(changeset, state) do
-    operator = get_field(changeset, :operator)
-
-    state
-    |> operator.initialize()
-    |> operator.changeset(changeset.params["payload"])
-    |> case do
-      inner_changeset = %{valid?: true} ->
-        put_change(changeset, :payload, inner_changeset)
-
-      inner_changeset = %{valid?: false} ->
-        errors = WS.Utils.Errors.changeset_errors(inner_changeset)
-        put_change(changeset, :errors, errors)
+    case WS.Message.Manifest.get_handler(opcode) do
+      {:ok, handler} ->
+        Logger.debug("Found handler: #{inspect(handler)}")
+        {:ok, handler}
+      {:error, reason} ->
+        Logger.debug("No handler found: #{inspect(reason)}")
+        {:error, reason}
     end
   end
 
-  defp cast_version(changeset = %{valid?: false}), do: changeset
+  defp create_changeset(handler, data) do
+    Logger.debug("Creating changeset with handler: #{inspect(handler)} and data: #{inspect(data)}")
 
-  defp cast_version(changeset = %{params: params}) do
-    if Map.has_key?(params, "version") do
-      cast(changeset, params, [:version])
-    else
-      add_error(changeset, :version, "is required")
-    end
-  end
-
-  defp validate_calls_have_references(changeset = %{valid?: false}), do: changeset
-
-  defp validate_calls_have_references(changeset) do
-    operator = get_field(changeset, :operator)
-
-    # if the operator has a reply submodule then it must be a "call" message.
-    # verify that these
-    if function_exported?(operator, :reply_module, 0) do
-      validate_required(changeset, [:reference], message: "is required for #{inspect(operator)}")
-    else
-      changeset
-    end
-  end
-
-  # encoding will only happen on egress out to the websocket.
-  defimpl Jason.Encoder do
-    def encode(message, opts) do
-      %{
-        op: operator(message),
-        p: message.payload,
-        v: message.version
-      }
-      |> add_reference(message)
-      |> add_errors(message)
-      |> Jason.Encode.map(opts)
-    end
-
-    defp operator(%{operator: op}) when is_binary(op), do: op
-
-    defp operator(%{operator: op}) when is_atom(op) do
-      if function_exported?(op, :operator, 0) do
-        op.operator()
+    try do
+      changeset = handler.changeset(data)
+      if changeset.valid? do
+        Logger.debug("Changeset valid: #{inspect(Ecto.Changeset.apply_changes(changeset))}")
+        {:ok, changeset}
+      else
+        Logger.error("Changeset invalid: #{inspect(changeset.errors)}")
+        {:error, :validation_failed}
       end
-    end
-
-    defp add_reference(map, %{reference: nil}), do: map
-    defp add_reference(map, %{reference: ref}), do: Map.put(map, :ref, ref)
-
-    defp add_errors(map, %{errors: nil}), do: map
-    defp add_errors(map, %{errors: e}), do: Map.put(map, :e, e)
-  end
-
-  defmacro __using__(_opts) do
-    quote do
-      def handler("register", data, state), do: WS.Message.Auth.StartSession.start_session(data, state)
-      def handler("send_friend_request", data, state), do: WS.Message.Friends.send_request(data, state)
-      def handler("accept_friend_request", data, state), do: WS.Message.Friends.accept_request(data, state)
-      def handler("decline_friend_request", data, state), do: WS.Message.Friends.decline_request(data, state)
-      def handler("remove_friend", data, state), do: WS.Message.Friends.remove_friend(data, state)
-
-      # Guild related
-      def handler("join_guild", data, state), do: WS.Message.Guilds.join_guild(data, state)
-      def handler("leave_guild", data, state), do: WS.Message.Guilds.leave_guild(data, state)
-      def handler("destroy_guild", data, state), do: WS.Message.Guilds.destroy_guild(data, state)
-      def handler("user_joined_guild", data, state), do: WS.Message.Guilds.user_joined_guild(data, state)
-      def handler("user_left_guild", data, state), do: WS.Message.Guilds.user_left_guild(data, state)
-
-      # Chat related
-      def handler("chat_message", data, state), do: WS.Message.Chat.send_message(data, state)
-      def handler("send_private_message", data, state), do: WS.Message.Chat.send_private_message(data, state)
-      def handler("send_group_message", data, state), do: WS.Message.Chat.send_group_message(data, state)
-
-      # Category related
-      def handler("create_category", data, state), do: WS.Message.Guilds.Categories.create_category(data, state)
-      def handler("delete_category", data, state), do: WS.Message.Guilds.Categories.delete_category(data, state)
-      def handler("update_category", data, state), do: WS.Message.Guilds.Categories.update_category(data, state)
-
-      # Channel related
-      def handler("create_channel", data, state), do: WS.Message.Guilds.Channels.create_channel(data, state)
-      def handler("delete_channel", data, state), do: WS.Message.Guilds.Channels.delete_channel(data, state)
-      def handler("join_channel", data, state), do: WS.Message.Guilds.Channels.join_channel(data, state)
-      def handler("leave_channel", data, state), do: WS.Message.Guilds.Channels.leave_channel(data, state)
-
-      # Group related
-      def handler("create_group", data, state), do: WS.Message.Channel.create_group(data, state)
-      def handler("delete_group", data, state), do: WS.Message.Channel.delete_group(data, state)
-      def handler("join_group", data, state), do: WS.Message.Channel.join_group(data, state)
-      def handler("leave_group", data, state), do: WS.Message.Channel.leave_group(data, state)
-
-      # Heartbeat / health check
-      def handler("ping", data, state), do: {:reply, {:ok, "pong"}, state}
-
-      # Default handler for unknown operations
-      def handler(op, _data, state) do
-        Logger.warn("Unknown operation received: #{op}")
-        {:reply, {:error, "Unknown operation #{op}"}, state}
-      end
+    rescue
+      e ->
+        Logger.error("Error creating changeset: #{inspect(e)}")
+        {:error, :changeset_error}
     end
   end
 end

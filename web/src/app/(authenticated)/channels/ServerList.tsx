@@ -24,13 +24,16 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
-import { useSocket } from "@/providers/SocketProvider";
+import { Opcodes, useSocket } from "@/providers/SocketProvider";
 import { useChatStore } from "@/stores/useChatStore";
 
 export default function ServerList() {
   const currentUser = useUserStore((state) => state.currentUser);
   const queryClient = useQueryClient();
   const setCurrentGuildId = useGuildStore((state) => state.setCurrentGuildId);
+  const setCurrentChannelId = useGuildStore(
+    (state) => state.setCurrentChannelId
+  );
   const currentGuildId = useGuildStore((state) => state.currentGuildId);
   const lastVisitedChannels = useGuildStore(
     (state) => state.lastVisitedChannels
@@ -83,26 +86,41 @@ export default function ServerList() {
     },
   });
 
-  const handleGuildClick = async (guildId: string) => {
+  const handleGuildClick = async (
+    guildId: string,
+    defaultChannelId: string
+  ) => {
+    // Don't do anything if we're already in this guild
+    if (currentGuildId === guildId) {
+      return;
+    }
+
     if (socket && socket.isConnected) {
       // First leave current guild if we're in one
       if (currentGuildId) {
         socket.sendMessage({
-          op: "leave_guild",
-          guild_id: guildId,
+          op: Opcodes.ChannelLeave,
+          d: {
+            guild_id: currentGuildId,
+            channel_id: lastVisitedChannels[currentGuildId] || null,
+          },
         });
       }
 
       // Then join the new guild
       socket.sendMessage({
-        op: "join_guild",
-        guild_id: guildId,
+        op: Opcodes.ChannelJoin,
+        d: {
+          guild_id: guildId,
+          channel_id: lastVisitedChannels[guildId] || null,
+        },
       });
     } else {
       console.error("Socket is not connected");
     }
 
     setCurrentGuildId(guildId);
+    setCurrentChannelId(defaultChannelId);
 
     if (lastVisitedChannels[guildId]) {
       router.push(`/channels/${guildId}/${lastVisitedChannels[guildId]}`);
@@ -128,10 +146,12 @@ export default function ServerList() {
               href={`/channels/me/${currentChatId ? `${currentChatId}` : ""}`}
               onClick={() => {
                 if (currentGuildId) {
-                  socket?.sendMessage({
-                    op: "leave_guild",
-                    guild_id: currentGuildId,
-                  });
+                  // socket?.sendMessage({
+                  //   op: "channel_leave",
+                  //   d: {
+                  //     guild_id: currentGuildId,
+                  //   },
+                  // });
                   setCurrentGuildId(null);
                 }
               }}
@@ -160,7 +180,12 @@ export default function ServerList() {
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
-                      onClick={() => handleGuildClick(guild.guilds.id)}
+                      onClick={() =>
+                        handleGuildClick(
+                          guild.guilds.id,
+                          guild.guilds.defaultChannelId
+                        )
+                      }
                       variant="ghost"
                       className="w-12 h-12 rounded-[24px] p-0 overflow-hidden transition-all duration-200 hover:rounded-[16px]"
                     >

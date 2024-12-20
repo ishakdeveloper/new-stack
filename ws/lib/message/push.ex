@@ -1,34 +1,55 @@
 defmodule WS.Message.Push do
   @moduledoc """
-  API contract statement for push message modules
+  Defines server-initiated messages to clients.
+  Example: New messages, presence updates, notifications.
   """
-
-  alias WS.Message.Cast
 
   defmacro __using__(opts) do
     quote do
       use Ecto.Schema
       import Ecto.Changeset
+      use WS.Message.Types.Operator
 
       @behaviour WS.Message.Push
 
       Module.register_attribute(__MODULE__, :directions, accumulate: true, persist: true)
       @directions [:outbound]
 
-      unquote(Cast.schema_ast(opts))
+      # Get opcode from module attribute or options
+      @opcode unquote(opts[:opcode]) || raise "Push messages must specify an opcode"
 
-      @after_compile WS.Message.Push
+      unquote(schema_ast(opts))
+
+      @impl true
+      def opcode, do: @opcode
+
+      @impl true
+      def encode(data) do
+        %{
+          "op" => opcode(),
+          "d" => data,
+          "t" => event_name()
+        }
+      end
+
+      @impl true
+      def event_name, do: __MODULE__ |> Module.split() |> List.last() |> String.upcase()
+
+      defoverridable [event_name: 0]
     end
   end
 
-  @callback changeset(WS.json()) :: Ecto.Changeset.t()
-  @callback operation() :: String.t()
-
-  @optional_callbacks [changeset: 1, operation: 0]
-
   def __after_compile__(%{module: module}, _bin) do
-    # checks to make sure you've either declared a schema module, or you have
-    # implemented a schema
-    Cast.check_for_schema(module, :outbound)
+    # Add any compile-time validations here if needed
+    :ok
   end
+
+  defp schema_ast(opts), do: WS.Message.Cast.schema_ast(opts)
+
+  @callback opcode() :: integer()
+  @callback encode(map()) :: map()
+  @callback event_name() :: String.t()
+  @callback changeset(map()) :: Ecto.Changeset.t()
+
+  @optional_callbacks [changeset: 1]
 end

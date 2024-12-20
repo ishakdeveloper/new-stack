@@ -11,17 +11,22 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Users, Inbox, HelpCircle, Settings, Plus, Link } from "lucide-react";
 import NextLink from "next/link";
 import { useEffect } from "react";
-import LoggedInUserBox from "../../components/LoggedInUserBox";
+import LoggedInUserBox from "../LoggedInUserBox";
 import { useChatStore } from "@/stores/useChatStore";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { SelectGroupMembers } from "./SelectGroupMembers";
 import { useSocket } from "@/providers/SocketProvider";
 import { useToast } from "@/hooks/use-toast";
+import { Opcodes } from "@/providers/SocketProvider";
 
 const ConversationSidebar = () => {
   const session = authClient.useSession();
-  const { lastMessage } = useSocket();
+  const {
+    lastMessage,
+    onMessage,
+    sendMessage: sendSocketMessage,
+  } = useSocket();
   const queryClient = useQueryClient();
   const { data: conversations } = useQuery({
     queryKey: ["conversations", session.data?.user?.id],
@@ -40,13 +45,11 @@ const ConversationSidebar = () => {
 
   const getConversationName = (conversation: any) => {
     if (conversation.isGroup) {
-      // For group chats, join all participant names
       const participantNames = conversation.participants
         .filter((p: any) => p.user && p.user.name)
         .map((p: any) => p.user.name);
       return participantNames.join(", ") || "Unnamed Group";
     } else {
-      // For DMs, show the other participant's name
       const otherParticipant = conversation.participants.find(
         (p: any) => p.user?.id !== session.data?.user?.id
       );
@@ -55,6 +58,10 @@ const ConversationSidebar = () => {
   };
 
   const handleConversationClick = (conversation: any) => {
+    if (currentChatId === conversation.id) {
+      return;
+    }
+
     const otherParticipant = conversation.participants.find(
       (p: any) => p.user?.id !== session.data?.user?.id
     );
@@ -62,20 +69,35 @@ const ConversationSidebar = () => {
     if (otherParticipant?.user?.id) {
       setOneOnOnePartner(conversation.id, otherParticipant.user.id);
     }
+
     setCurrentChatId(conversation.id);
+
+    if (currentChatId) {
+      sendSocketMessage({
+        op: Opcodes.ChannelLeave,
+        d: {
+          channel_id: currentChatId,
+        },
+      });
+    }
+
+    sendSocketMessage({
+      op: Opcodes.ChannelJoin,
+      d: {
+        channel_id: conversation.id,
+      },
+    });
 
     router.push(`/channels/me/${conversation.id}`);
   };
 
   const getAvatarText = (conversation: any) => {
     if (conversation.isGroup) {
-      // For groups, use first letter of first two valid participants
       const validParticipants = conversation.participants
         .filter((p: any) => p.user?.name)
         .slice(0, 2);
       return validParticipants.map((p: any) => p.user.name[0]).join("") || "G";
     } else {
-      // For DMs, use first letter of other participant's name
       const otherParticipant = conversation.participants.find(
         (p: any) => p.user?.id !== session.data?.user?.id
       );
@@ -84,23 +106,43 @@ const ConversationSidebar = () => {
   };
 
   useEffect(() => {
-    try {
-      if (lastMessage) {
-        if (lastMessage.data.op === "channel_created") {
-          queryClient.invalidateQueries({
-            queryKey: ["conversations", session.data?.user.id],
-          });
+    // Listen for channel/group creation events
+    const unsubscribe = onMessage("GUILD_CREATE", (payload) => {
+      queryClient.invalidateQueries({
+        queryKey: ["conversations", session.data?.user?.id],
+      });
 
-          toast({
-            title: "Group created",
-            description: `You have been added to a group`,
-          });
-        }
+      toast({
+        title: "Group created",
+        description: `You have been added to a group`,
+      });
+    });
+
+    // Listen for channel updates
+    const unsubscribeUpdate = onMessage("GUILD_UPDATE", (payload) => {
+      queryClient.invalidateQueries({
+        queryKey: ["conversations", session.data?.user?.id],
+      });
+    });
+
+    // Listen for channel deletions
+    const unsubscribeDelete = onMessage("GUILD_DELETE", (payload) => {
+      queryClient.invalidateQueries({
+        queryKey: ["conversations", session.data?.user?.id],
+      });
+
+      if (currentChatId === payload.id) {
+        setCurrentChatId(null);
+        router.push("/channels/me");
       }
-    } catch (error) {
-      console.error(error);
-    }
-  }, [lastMessage]);
+    });
+
+    return () => {
+      unsubscribe();
+      unsubscribeUpdate();
+      unsubscribeDelete();
+    };
+  }, [session.data?.user?.id, queryClient, currentChatId]);
 
   return (
     <div className="w-60 border-r flex flex-col">

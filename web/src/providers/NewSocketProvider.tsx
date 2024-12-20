@@ -1,97 +1,55 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { createWebSocketConnection } from "@repo/api/src/index";
-import { useRouter } from "next/router";
+import { createContext, useCallback, useContext, useEffect } from "react";
+import * as WebSocket from "@repo/api";
+import type { WebSocketMessage } from "@repo/api";
+import { Session } from "@/utils/authClient";
 
-const apiBaseUrl = "http://localhost:4001";
-interface SocketProviderProps {
-  shouldConnect: boolean;
-  children: React.ReactNode;
+interface SocketContextType {
+  sendMessage: (message: WebSocketMessage) => void;
+  onMessage: typeof WebSocket.onMessage;
+  isConnected: boolean;
 }
 
-type WebSocketConnection = ReturnType<typeof createWebSocketConnection> | null;
+const SocketContext = createContext<SocketContextType | null>(null);
 
-const SocketContext = React.createContext<{
-  connection: WebSocketConnection;
-  sendMessage: (opcode: string, data: unknown) => void;
-}>({
-  connection: null,
-  sendMessage: () => {},
-});
-
-export const NewSocketProvider: React.FC<SocketProviderProps> = ({
-  shouldConnect,
-  children,
-}) => {
-  const [connection, setConnection] = useState<WebSocketConnection>(null);
-  const { replace } = useRouter();
-  const isConnecting = useRef(false);
-
+export const SocketProvider: React.FC<{
+  children: React.ReactNode;
+  session: Session | null;
+}> = ({ children, session }) => {
   useEffect(() => {
-    const connectToSocket = async () => {
-      if (!connection && shouldConnect && !isConnecting.current) {
-        isConnecting.current = true;
-        try {
-          const wsConnection = createWebSocketConnection(
-            `${apiBaseUrl.replace("http", "ws")}/ws`,
-            {
-              logger: (direction, opcode, data) => {
-                console.log(`WS ${direction}:`, opcode, data);
-              },
-              onConnectionTaken: () => {
-                replace("/connection-taken");
-              },
-              onClearTokens: () => {
-                replace("/logout");
-              },
-              waitToReconnect: true,
-            }
-          );
+    if (session?.user?.id) {
+      const params = new URLSearchParams({
+        user_id: session.user.id,
+        encoding: "json",
+        compression: "zlib_json",
+      });
 
-          await wsConnection.sendCall("auth", {});
+      WebSocket.connect(`${process.env.NEXT_PUBLIC_WS_URL}?${params}`, {
+        debug: true,
+      });
 
-          setConnection(wsConnection);
-        } catch (err: any) {
-          if (err.code === 4001) {
-            replace(`/?next=${window.location.pathname}`);
-          }
-          console.error("WebSocket connection error:", err);
-        } finally {
-          isConnecting.current = false;
-        }
-      }
-    };
+      return () => {
+        WebSocket.disconnect();
+      };
+    }
+  }, [session]);
 
-    connectToSocket();
-
-    // Cleanup function
-    return () => {
-      if (connection) {
-        connection.close();
-      }
-    };
-  }, [connection, shouldConnect, replace]);
-
-  const contextValue = useMemo(
-    () => ({
-      connection,
-      sendMessage: (opcode: string, data: unknown) => {
-        connection?.send(opcode, data);
-      },
-    }),
-    [connection]
-  );
+  const value = {
+    sendMessage: WebSocket.sendMessage,
+    onMessage: WebSocket.onMessage,
+    isConnected: WebSocket.isConnected(),
+  };
 
   return (
-    <SocketContext.Provider value={contextValue}>
-      {children}
-    </SocketContext.Provider>
+    <SocketContext.Provider value={value}>{children}</SocketContext.Provider>
   );
 };
 
 export const useSocket = () => {
-  const context = React.useContext(SocketContext);
+  const context = useContext(SocketContext);
   if (!context) {
     throw new Error("useSocket must be used within a SocketProvider");
   }
   return context;
 };
+
+export { Opcodes } from "@repo/api";

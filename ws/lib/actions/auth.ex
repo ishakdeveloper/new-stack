@@ -1,48 +1,55 @@
 defmodule WS.Actions.Auth do
   require Logger
+  import Ecto.Changeset
+  use WS.Message.Types.Operator
+  alias WS.Message
 
-  def handle(request, state) do
-    with {:ok, user_data} <- extract_user_data(request),
-         {:ok, user} <- get_user(user_data) do
+  def handle(changeset, state) do
+    # Get the user data from the changeset
+    user_data = Ecto.Changeset.apply_changes(changeset)
 
-      WS.Workers.UserSession.register_user(user_id: user.id, pid: self())
-      WS.Workers.UserSession.set_active_ws(user.id, self())
+    # Create a new session ID using Ecto.UUID
+    session_id = Ecto.UUID.generate()
 
-      response = %{
-        op: "auth:success",
-        p: Map.from_struct(user)
-      }
-      {:reply, response, %{state | user: user}}
-    else
-      {:error, reason} ->
-        Logger.error("Auth failed: #{inspect(reason)}")
-        {:reply, %{
-          op: "auth:error",
-          p: %{message: reason}
-        }, state}
+    # Create the ready response using the Ready struct
+    ready_message = WS.Messages.Auth.Ready.changeset(%{
+      user: Map.from_struct(user_data),
+      session_id: session_id,
+      guilds: [],  # Add guild data if needed
+      private_channels: []  # Add channel data if needed
+    })
+    |> Ecto.Changeset.apply_changes()
+
+    {:reply, ready_message, %{state | session_id: session_id}}
+  end
+
+  defp register_user_session(user_id) do
+    Logger.debug("Registering user session for #{user_id}")
+
+    case WS.Workers.UserSession.register_user(user_id: user_id) do
+      {:ok, pid} ->
+        Logger.debug("User session registered with pid: #{inspect(pid)}")
+        {:ok, pid}
+      {:error, {:already_started, pid}} ->
+        Logger.debug("User session already exists with pid: #{inspect(pid)}")
+        {:ok, pid}
+      error ->
+        Logger.error("Failed to register user session: #{inspect(error)}")
+        {:error, "Failed to create user session"}
     end
   end
 
-  # Extract user data from different payload formats
-  defp extract_user_data(%{"user" => user_data}) when is_map(user_data), do: {:ok, user_data}
-  defp extract_user_data(%{"0" => user_data}) when is_map(user_data), do: {:ok, user_data}
-  defp extract_user_data([user_data | _]) when is_map(user_data), do: {:ok, user_data}
-  defp extract_user_data(data), do: {:error, "Invalid user data format: #{inspect(data)}"}
+  defp set_active_websocket(user_id, ws_pid) do
+    Logger.debug("Setting active websocket for user #{user_id} to #{inspect(ws_pid)}")
 
-  # Convert user data to struct
-  defp get_user(%{"id" => _id} = data) do
-    {:ok, struct(WS.User, %{
-      id: data["id"],
-      name: data["name"],
-      nickname: data["nickname"],
-      email: data["email"],
-      email_verified: data["emailVerified"],
-      image: data["image"],
-      bio: data["bio"],
-      banner: data["banner"],
-      created_at: data["createdAt"],
-      updated_at: data["updatedAt"]
-    })}
+    try do
+      WS.Workers.UserSession.set_active_ws(user_id, ws_pid)
+      :ets.insert(:ws_connections, {user_id, ws_pid})
+      :ok
+    catch
+      kind, reason ->
+        Logger.error("Failed to set active websocket: #{inspect({kind, reason})}")
+        {:error, "Failed to set active websocket"}
+    end
   end
-  defp get_user(data), do: {:error, "Missing required user data"}
 end

@@ -4,110 +4,223 @@ defmodule WS.Workers.Rabbit do
   alias AMQP.{Basic, Channel, Connection, Exchange, Queue}
 
   @exchange "ws_events"
-  @send_queue "ws_events_send"
-  @receive_queue "ws_events_receive"
-
-  # Add message deduplication cache
-  @message_cache_ttl 5_000  # 5 seconds TTL
+  @reconnect_interval 5_000
 
   def start_link(_) do
     GenServer.start_link(__MODULE__, [], name: __MODULE__)
   end
 
-  def init(_) do
-    # Create message cache ETS table
-    :ets.new(:rabbit_message_cache, [:named_table, :set, :public])
-
-    # Start message cache cleanup timer
-    Process.send_after(self(), :cleanup_message_cache, @message_cache_ttl)
-
-    connect()
+  def init(_opts) do
+    send(self(), :connect)
+    {:ok, %{channel: nil, connection: nil}}
   end
 
-  defp connect do
-    case Connection.open("amqp://guest:guest@localhost") do
-      {:ok, conn} ->
-        Process.monitor(conn.pid)
-        case Channel.open(conn) do
-          {:ok, chan} ->
-            setup_queue(chan)
-            {:ok, %{conn: conn, chan: chan}}
-          {:error, reason} ->
-            Logger.error("Failed to open channel: #{inspect(reason)}")
-            {:stop, reason}
-        end
-      {:error, reason} ->
-        Logger.error("Failed to connect to RabbitMQ: #{inspect(reason)}")
-        # Retry connection after delay
-        Process.send_after(self(), :connect, 5000)
-        {:ok, %{conn: nil, chan: nil}}
+  def publish_event(opcode, payload) do
+    case GenServer.call(__MODULE__, {:publish_event, opcode, payload}) do
+      {:error, :no_connection} ->
+        # If no connection, try to reconnect and retry once
+        Process.send_after(self(), :connect, 1000)
+        Process.sleep(1500) # Wait for reconnection
+        GenServer.call(__MODULE__, {:publish_event, opcode, payload})
+      result -> result
     end
   end
 
-  defp setup_queue(chan) do
-    # Setup exchange with passive: true to avoid conflicts
-    case Exchange.declare(chan, @exchange, :direct, passive: true) do
-      :ok ->
-        Logger.debug("Exchange exists, continuing setup")
-      {:error, _} ->
-        # If exchange doesn't exist, create it
-        :ok = Exchange.declare(chan, @exchange, :direct, durable: false)
-        Logger.debug("Created new exchange")
+  def handle_call({:publish_event, opcode, payload}, _from, %{channel: nil} = state) do
+    Logger.error("No RabbitMQ channel available")
+    {:reply, {:error, :no_connection}, state}
+  end
+
+  def handle_call({:publish_event, opcode, payload}, _from, state) do
+    message = %{
+      op: opcode,
+      p: payload,
+      v: "1"
+    }
+
+    routing_key = if String.starts_with?(opcode, "auth:"), do: "auth", else: "ws"
+    Logger.debug("Publishing event #{opcode} with routing key #{routing_key}: #{inspect(message)}")
+
+    result = try do
+      case Jason.encode(message) do
+        {:ok, json} ->
+          case Basic.publish(state.channel, @exchange, routing_key, json) do
+            :ok -> :ok
+            error ->
+              Logger.error("Failed to publish: #{inspect(error)}")
+              {:error, :publish_failed}
+          end
+        {:error, reason} ->
+          Logger.error("Failed to encode message: #{inspect(reason)}")
+          {:error, reason}
+      end
+    catch
+      kind, reason ->
+        Logger.error("Error in publish_event: #{inspect(reason)}")
+        Process.send_after(self(), :connect, @reconnect_interval)
+        {:error, reason}
     end
 
-    # Setup queues
-    {:ok, _} = Queue.declare(chan, @send_queue, durable: false)
-    {:ok, _} = Queue.declare(chan, @receive_queue, durable: false)
-
-    # Bind queues to exchange
-    :ok = Queue.bind(chan, @send_queue, @exchange, routing_key: "send")
-    :ok = Queue.bind(chan, @receive_queue, @exchange, routing_key: "receive")
-
-    # Start consuming
-    {:ok, _consumer_tag} = Basic.consume(chan, @send_queue)
-
-    Logger.info("🐰 Connected to RabbitMQ")
+    {:reply, result, state}
   end
 
   def handle_info(:connect, state) do
     case connect() do
-      {:ok, new_state} -> {:noreply, new_state}
-      {:stop, reason} -> {:stop, reason, state}
-    end
-  end
-
-  def handle_info({:DOWN, _, :process, _pid, reason}, _state) do
-    Logger.error("RabbitMQ connection lost: #{inspect(reason)}")
-    # Reconnect after delay
-    Process.send_after(self(), :connect, 5000)
-    {:noreply, %{conn: nil, chan: nil}}
-  end
-
-  def handle_info({:basic_deliver, payload, _meta} = message, state) do
-    message_hash = :erlang.phash2(payload)
-
-    case :ets.lookup(:rabbit_message_cache, message_hash) do
-      [] ->
-        # Cache the message
-        :ets.insert(:rabbit_message_cache, {message_hash, System.system_time(:millisecond)})
-
-        # Process the message
-        case Jason.decode(payload) do
-          {:ok, %{"op" => "auth:login", "p" => user_data}} ->
-            Logger.info("Processing auth:login message: #{inspect(user_data)}")
-            handle_auth_message(user_data)
-            {:noreply, state}
-          {:ok, decoded} ->
-            Logger.debug("Received other message: #{inspect(decoded)}")
-            {:noreply, state}
-          {:error, reason} ->
-            Logger.error("Failed to decode RabbitMQ message: #{inspect(reason)}")
-            {:noreply, state}
-        end
-      _ ->
-        Logger.debug("Duplicate message detected, skipping")
+      {:ok, new_state} ->
+        Logger.info("Successfully connected to RabbitMQ")
+        {:noreply, new_state}
+      {:error, reason} ->
+        Logger.error("Failed to connect to RabbitMQ: #{inspect(reason)}")
+        Process.send_after(self(), :connect, @reconnect_interval)
         {:noreply, state}
     end
+  end
+
+  def handle_info({:DOWN, _, :process, pid, reason}, state) do
+    Logger.error("RabbitMQ connection lost: #{inspect(reason)}")
+    Process.send_after(self(), :connect, @reconnect_interval)
+    {:noreply, %{state | channel: nil, connection: nil}}
+  end
+
+  defp connect do
+    case Connection.open() do
+      {:ok, conn} ->
+        Process.monitor(conn.pid)
+        case Channel.open(conn) do
+          {:ok, channel} ->
+            setup_rabbitmq(channel)
+            {:ok, %{channel: channel, connection: conn}}
+          {:error, reason} ->
+            Connection.close(conn)
+            {:error, reason}
+        end
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp setup_rabbitmq(channel) do
+    # Set QoS
+    :ok = Basic.qos(channel, prefetch_count: 1)
+
+    # Try to delete the exchange first
+    try do
+      Exchange.delete(channel, @exchange)
+    catch
+      :exit, _ -> :ok
+    end
+
+    # Wait a brief moment to ensure cleanup
+    Process.sleep(100)
+
+    # Declare exchange with retries
+    setup_exchange(channel, 3)
+
+    # Setup queues
+    setup_queues(channel)
+
+    # Start consuming
+    {:ok, _} = Basic.consume(channel, "ws_service_queue", nil, no_ack: false)
+  end
+
+  defp setup_exchange(channel, attempts) when attempts > 0 do
+    try do
+      :ok = Exchange.declare(channel, @exchange, :direct,
+        durable: false,  # Changed to false to match existing setup
+        auto_delete: false
+      )
+      :ok
+    catch
+      :exit, {:shutdown, {:server_initiated_close, 406, _}} ->
+        Logger.warn("Exchange exists with different settings, retrying after cleanup...")
+        Process.sleep(1000)
+        setup_exchange(channel, attempts - 1)
+      error ->
+        Logger.error("Failed to declare exchange: #{inspect(error)}")
+        {:error, error}
+    end
+  end
+
+  defp setup_exchange(_, 0) do
+    Logger.error("Failed to setup exchange after multiple attempts")
+    {:error, :exchange_setup_failed}
+  end
+
+  defp setup_queues(channel) do
+    # Delete existing queues if they exist
+    try_delete_queue(channel, "auth_service_queue")
+    try_delete_queue(channel, "ws_service_queue")
+
+    # Declare queues
+    {:ok, %{queue: auth_queue}} = Queue.declare(channel, "auth_service_queue",
+      durable: false,  # Changed to false to match exchange
+      auto_delete: true
+    )
+
+    {:ok, %{queue: ws_queue}} = Queue.declare(channel, "ws_service_queue",
+      durable: false,  # Changed to false to match exchange
+      auto_delete: true
+    )
+
+    # Bind queues
+    :ok = Queue.bind(channel, auth_queue, @exchange, routing_key: "auth")
+    :ok = Queue.bind(channel, ws_queue, @exchange, routing_key: "ws")
+  end
+
+  defp try_delete_queue(channel, queue_name) do
+    try do
+      Queue.delete(channel, queue_name)
+    catch
+      :exit, _ -> :ok
+    end
+  end
+
+  def handle_info({:basic_deliver, payload, meta}, state) do
+    try do
+      case Jason.decode(payload) do
+        {:ok, message} ->
+          Logger.debug("Received RabbitMQ message: #{inspect(message)}")
+
+          case message do
+            %{"op" => "auth:request_user"} = msg ->
+              Logger.debug("Processing auth request: #{inspect(msg)}")
+              handle_auth_request(msg["p"], state.channel, meta)
+
+            %{"op" => "auth:success"} = msg ->
+              Logger.debug("Processing auth success: #{inspect(msg)}")
+              handle_auth_success(msg["p"], state.channel, meta)
+
+            _ ->
+              Logger.debug("Unknown message type: #{inspect(message)}")
+              Basic.ack(state.channel, meta.delivery_tag)
+          end
+
+        {:error, reason} ->
+          Logger.error("Failed to decode message: #{inspect(reason)}")
+          Basic.reject(state.channel, meta.delivery_tag, requeue: false)
+      end
+    catch
+      kind, reason ->
+        Logger.error("Error processing message: #{inspect(reason)}")
+        Basic.reject(state.channel, meta.delivery_tag, requeue: false)
+    end
+    {:noreply, state}
+  end
+
+  def handle_info({:forward_auth_request, %{"user_id" => user_id} = data}, state) do
+    Logger.debug("Forwarding auth request via RabbitMQ for user #{user_id}")
+
+    # Add message deduplication with timestamp
+    message = Map.put(data, "ts", System.system_time(:millisecond))
+
+    case publish_event("auth:request_user", message) do
+      :ok ->
+        Logger.debug("Successfully published auth request for user #{user_id}")
+      {:error, reason} ->
+        Logger.error("Failed to publish auth request: #{inspect(reason)}")
+    end
+
+    {:noreply, state}
   end
 
   def handle_info(:cleanup_message_cache, state) do
@@ -155,55 +268,91 @@ defmodule WS.Workers.Rabbit do
     {:noreply, state}
   end
 
-  defp handle_auth_message(session_data) do
-    Logger.debug("Processing auth message ")
-
-    {user_data, session_token} = case session_data do
-      # Session-only format
-      %{"userId" => user_id, "token" => token} ->
-        {%{"id" => user_id}, token}
-
-      # Nested format with user data
-      %{"0" => %{"0" => user, "session" => %{"token" => token}}} ->
-        {user, token}
-
-      # Direct format with session
-      %{"0" => user, "session" => %{"token" => token}} ->
-        {user, token}
-
-      # Array format
-      [user | _] when is_map(user) ->
-        {user, nil}
-
-      _ -> {nil, nil}
+  def handle_cast({:publish, message, routing_key}, state) do
+    case Jason.encode(message) do
+      {:ok, json} ->
+        Basic.publish(state.channel, @exchange, routing_key, json)
+        {:noreply, state}
+      {:error, reason} ->
+        Logger.error("Failed to encode message: #{inspect(reason)}")
+        {:noreply, state}
     end
+  end
 
-    if user_data do
-      user_id = user_data["id"]
-      Logger.debug("Processing auth for user #{user_id}")
+  defp handle_auth_request(%{"user_id" => user_id, "reply_to" => reply_to} = data, channel, meta) do
+    Logger.debug("Handling auth request for user #{user_id}")
 
-      initial_state = %{
-        user: nil,
-        compression: :zlib,
-        encoding: :json,
-        session_id: session_token
-      }
+    try do
+      # Query the database for user data
+      case WS.Database.get_user(user_id) do
+        {:ok, user_data} when not is_nil(user_data) ->
+          Logger.debug("Found user data, publishing auth success")
 
-      case WS.Actions.Auth.handle(%{"user" => user_data}, initial_state) do
-        {:reply, response, _new_state} ->
-          Logger.debug("Auth successful, sending response through UserSession: #{inspect(response)}")
-          case WS.Workers.UserSession.send_ws(user_id, response) do
-            :ok ->
-              Logger.debug("Message sent to UserSession successfully #{user_id} #{inspect(response)}")
-            {:error, reason} ->
-              Logger.error("Failed to send message: #{inspect(reason)}")
-          end
+          # Publish auth success message
+          message = %{
+            op: "auth:success",
+            p: user_data,
+            v: "1"
+          }
+
+          Basic.publish(channel, @exchange, "ws", Jason.encode!(message))
+          Basic.ack(channel, meta.delivery_tag)
 
         {:error, reason} ->
-          Logger.error("Auth action failed: #{inspect(reason)}")
+          Logger.error("Failed to fetch user data: #{inspect(reason)}")
+          Basic.reject(channel, meta.delivery_tag, requeue: true)
+
+        _ ->
+          Logger.error("No user data found for ID: #{user_id}")
+          Basic.reject(channel, meta.delivery_tag, requeue: false)
       end
-    else
-      Logger.error("Could not extract user data from message: #{inspect(session_data)}")
+    catch
+      kind, reason ->
+        Logger.error("Error in auth request handler: #{inspect(reason)}")
+        Basic.reject(channel, meta.delivery_tag, requeue: true)
+    end
+  end
+
+  defp handle_auth_success(user_data, channel, meta) do
+    Logger.debug("Handling auth success: #{inspect(user_data)}")
+
+    case user_data do
+      %{"id" => user_id} when is_binary(user_id) ->
+        case :ets.lookup(:ws_connections, user_id) do
+          [{^user_id, ws_pid}] when is_pid(ws_pid) ->
+            if Process.alive?(ws_pid) do
+              Logger.debug("Sending auth success to WebSocket for user #{user_id}")
+              send(ws_pid, {:remote_send, %{op: "auth:success", p: user_data}})
+              Basic.ack(channel, meta.delivery_tag)
+            else
+              Logger.error("WebSocket process is dead for user #{user_id}")
+              :ets.delete(:ws_connections, user_id)
+              Basic.reject(channel, meta.delivery_tag, requeue: true)
+            end
+
+          _ ->
+            Logger.error("No WebSocket connection found for user #{user_id}")
+            Basic.reject(channel, meta.delivery_tag, requeue: true)
+        end
+
+      _ ->
+        Logger.error("Invalid user data format: #{inspect(user_data)}")
+        Basic.reject(channel, meta.delivery_tag, requeue: false)
+    end
+  end
+
+  defp send_with_retry(user_id, message, attempts \\ 3, delay \\ 1000) do
+    case WS.Workers.UserSession.send_ws(user_id, message) do
+      :ok ->
+        Logger.debug("Auth success message sent to UserSession for user #{user_id}")
+        :ok
+      {:error, :no_socket} when attempts > 1 ->
+        Logger.debug("No socket found for user #{user_id}, retrying in #{delay}ms (#{attempts - 1} attempts remaining)")
+        Process.sleep(delay)
+        send_with_retry(user_id, message, attempts - 1, delay)
+      {:error, reason} ->
+        Logger.error("Failed to send auth success message: #{inspect(reason)}")
+        {:error, reason}
     end
   end
 
@@ -245,5 +394,25 @@ defmodule WS.Workers.Supervisors.RabbitSupervisor do
     ]
 
     Supervisor.init(children, strategy: :one_for_one)
+  end
+end
+
+defmodule WS.Database do
+  require Logger
+
+  def get_user(user_id) do
+    try do
+      case WS.Workers.Rabbit.publish_event("auth:request_user", %{
+        user_id: user_id,
+        reply_to: "auth:success"
+      }) do
+        :ok -> {:ok, nil}  # Return nil as the actual data will come through the queue
+        {:error, reason} -> {:error, reason}
+      end
+    catch
+      kind, reason ->
+        Logger.error("Error requesting user data: #{inspect(reason)}")
+        {:error, reason}
+    end
   end
 end

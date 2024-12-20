@@ -6,6 +6,7 @@ import { openAPI } from "better-auth/plugins";
 import { v4 as uuidv4 } from "uuid";
 import { rabbitMQ } from "./rabbitmq";
 import { eq } from "drizzle-orm";
+// Add event listener for user data requests
 
 export const auth = betterAuth({
   baseUrl: "http://localhost:4000/",
@@ -15,33 +16,6 @@ export const auth = betterAuth({
     provider: "pg",
     schema: authSchema,
   }),
-  databaseHooks: {
-    session: {
-      create: {
-        after: async (session) => {
-          const user = await db
-            .select()
-            .from(authSchema.user)
-            .where(eq(authSchema.user.id, session.userId));
-          if (!user) return;
-
-          const userAndSession = {
-            ...user,
-            session,
-          };
-
-          await rabbitMQ.publishEvent("auth:login", user);
-        },
-      },
-    },
-    user: {
-      create: {
-        after: async (user) => {
-          await rabbitMQ.publishEvent("auth:login", user);
-        },
-      },
-    },
-  },
   advanced: {
     generateId: () => {
       return uuidv4();
@@ -75,3 +49,53 @@ export type User = typeof auth.$Infer.Session.user & {
   discriminator: string;
 };
 export type Session = typeof auth.$Infer.Session.session;
+
+// Initialize the service
+export async function initializeAuthService() {
+  // Connect to RabbitMQ
+  await rabbitMQ.initialize();
+
+  // Set up auth:request_user handler
+  await rabbitMQ.subscribeEvent(
+    "auth:request_user",
+    async (data: { user_id: string; reply_to: string }) => {
+      console.log(`Received auth:request_user for ${data.user_id}`);
+
+      try {
+        const user = await db
+          .select()
+          .from(authSchema.user)
+          .where(eq(authSchema.user.id, data.user_id))
+          .limit(1);
+
+        if (user?.[0]) {
+          console.log(
+            `Found user data for ${data.user_id}, sending auth:success`
+          );
+          await rabbitMQ.publishEvent("auth:success", {
+            ...user[0],
+            session: {
+              userId: data.user_id,
+            },
+          });
+        } else {
+          console.log(`No user found for ID: ${data.user_id}`);
+        }
+      } catch (error) {
+        console.error(`Error fetching user data:`, error);
+      }
+    }
+  );
+
+  // Also listen for auth:login events
+  await rabbitMQ.subscribeEvent("auth:login", async (data) => {
+    console.log(`Received auth:login event:`, data);
+    // Forward the login data as auth:success
+    await rabbitMQ.publishEvent("auth:success", {
+      ...data,
+      session: {
+        userId: data[0]?.id,
+      },
+    });
+  });
+}

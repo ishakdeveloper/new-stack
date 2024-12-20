@@ -1,137 +1,238 @@
-import WebSocket from "isomorphic-ws";
-import ReconnectingWebSocket from "reconnecting-websocket";
-import { v4 as generateUuid } from "uuid";
+import pako from "pako";
 
-type Listener<Data = unknown> = {
-  opcode: string;
-  handler: (data: Data, ref?: string) => void;
+// Discord-like Gateway Opcodes
+export enum Opcodes {
+  // Connection & State
+  Dispatch = 0,
+  Heartbeat = 1,
+  Identify = 2,
+  Presence = 3,
+  Ready = 4,
+
+  // Session
+  Resume = 6,
+  Reconnect = 7,
+  RequestGuildMembers = 8,
+  InvalidSession = 9,
+  Hello = 10,
+  HeartbeatAck = 11,
+
+  // Custom Events (15+)
+  GuildCreate = 15,
+  GuildUpdate = 16,
+  GuildDelete = 17,
+  ChannelCreate = 18,
+  ChannelUpdate = 19,
+  ChannelDelete = 20,
+  MessageCreate = 21,
+  MessageUpdate = 22,
+  MessageDelete = 23,
+
+  FriendRequest = 30,
+  FriendAccept = 31,
+  FriendDecline = 32,
+  FriendRemove = 33,
+  PubSubEvent = "pubsub_event",
+}
+
+export type PubSubEvents =
+  | "friend_request_received"
+  | "friend_request_accepted"
+  | "friend_request_declined"
+  | "message_received"
+  | "user_joined_guild"
+  | "user_left_guild";
+
+export interface WebSocketMessage {
+  op: Opcodes | string;
+  d: any;
+  t?: string;
+}
+
+export type MessageListener = (data: any) => void;
+export type MessageListeners = Record<string, MessageListener[]>;
+
+interface WebSocketState {
+  ws: WebSocket | null;
+  messageListeners: MessageListeners;
+  heartbeatInterval: ReturnType<typeof setInterval> | null;
+  reconnectAttempts: number;
+}
+
+const state: WebSocketState = {
+  ws: null,
+  messageListeners: {},
+  heartbeatInterval: null,
+  reconnectAttempts: 0,
 };
 
-export type Logger = (
-  direction: "in" | "out",
-  opcode: string,
-  data?: unknown,
-  ref?: string,
-  raw?: string
-) => void;
+const MAX_RECONNECT_ATTEMPTS = 5;
+const RECONNECT_DELAY = 1000;
+const HEARTBEAT_INTERVAL = 30000;
 
-export const createWebSocketConnection = (
+export const log = (debug: boolean, ...args: any[]) => {
+  if (debug) {
+    console.log("[WebSocket]", ...args);
+  }
+};
+
+export const decompressMessage = async (
+  blob: Blob
+): Promise<WebSocketMessage> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const uint8Array = new Uint8Array(reader.result as ArrayBuffer);
+        const decompressed = pako.inflate(uint8Array, {
+          to: "string",
+          raw: false,
+        });
+        resolve(JSON.parse(decompressed));
+      } catch (error) {
+        reject(error);
+      }
+    };
+    reader.readAsArrayBuffer(blob);
+  });
+};
+
+export const handleMessage = async (event: MessageEvent, debug = false) => {
+  try {
+    let data: WebSocketMessage;
+
+    if (event.data instanceof Blob) {
+      data = await decompressMessage(event.data);
+    } else {
+      data = JSON.parse(event.data);
+    }
+
+    log(debug, "Received message:", data);
+
+    if (data.op === Opcodes.PubSubEvent) {
+      const eventType = data.d.event_type;
+      const payload = data.d.data;
+
+      log(debug, "PubSub event type:", eventType);
+      log(debug, "PubSub payload:", payload);
+
+      const listeners = state.messageListeners[eventType] || [];
+      listeners.forEach((listener) => {
+        try {
+          listener(data.d);
+        } catch (error) {
+          log(debug, "Error in listener:", error);
+        }
+      });
+    } else {
+      const listeners = state.messageListeners[data.t || data.op] || [];
+      listeners.forEach((listener) => {
+        try {
+          listener(data.d);
+        } catch (error) {
+          log(debug, "Error in listener:", error);
+        }
+      });
+    }
+  } catch (error) {
+    log(debug, "Error processing message:", error);
+  }
+};
+
+export const startHeartbeat = () => {
+  state.heartbeatInterval = setInterval(() => {
+    sendMessage({
+      op: Opcodes.Heartbeat,
+      d: { timestamp: Date.now() },
+    });
+  }, HEARTBEAT_INTERVAL);
+};
+
+export const cleanup = () => {
+  if (state.heartbeatInterval) {
+    clearInterval(state.heartbeatInterval);
+    state.heartbeatInterval = null;
+  }
+  state.messageListeners = {};
+};
+
+export const attemptReconnect = (url: string, debug = false) => {
+  if (state.reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+    state.reconnectAttempts++;
+    const delay = RECONNECT_DELAY * Math.pow(2, state.reconnectAttempts - 1);
+    log(debug, `Attempting to reconnect in ${delay}ms...`);
+    setTimeout(() => connect(url), delay);
+  }
+};
+
+export const connect = (
   url: string,
-  {
-    logger = () => {},
-    onConnectionTaken = () => {},
-    onClearTokens = () => {},
-    waitToReconnect,
-  }: {
-    logger?: Logger;
-    onConnectionTaken?: () => void;
-    onClearTokens?: () => void;
-    waitToReconnect?: boolean;
+  options: {
+    onOpen?: () => void;
+    onClose?: () => void;
+    onError?: (error: Event) => void;
+    debug?: boolean;
   } = {}
 ) => {
-  const listeners: Listener<any>[] = [];
-  const heartbeatInterval = 8000;
+  try {
+    state.ws = new WebSocket(url);
+    state.ws.binaryType = "blob";
 
-  const socket = new ReconnectingWebSocket(url, [], {
-    WebSocket,
-    connectionTimeout: 15000,
-  });
+    state.ws.onopen = () => {
+      log(options.debug ?? false, "WebSocket connected");
+      state.reconnectAttempts = 0;
+      startHeartbeat();
+      options.onOpen?.();
+    };
+    state.ws.onclose = () => {
+      log(options.debug ?? false, "WebSocket closed");
+      cleanup();
+      attemptReconnect(url, options.debug ?? false);
+      options.onClose?.();
+    };
 
-  const send = (opcode: string, data: unknown, ref?: string) => {
-    if (socket.readyState !== WebSocket.OPEN) return;
+    state.ws.onerror = (error) => {
+      log(options.debug ?? false, "WebSocket error:", error);
+      options.onError?.(error);
+    };
 
-    const raw = JSON.stringify({
-      op: opcode,
-      p: data,
-      v: 1,
-      ...(ref ? { ref } : {}),
-    });
+    state.ws.onmessage = (event) => handleMessage(event, options.debug);
+  } catch (error) {
+    log(options.debug ?? false, "Error creating WebSocket:", error);
+    attemptReconnect(url, options.debug);
+  }
+};
 
-    socket.send(raw);
-    logger("out", opcode, data, ref, raw);
+export const sendMessage = (message: WebSocketMessage) => {
+  if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
+    return;
+  }
+  state.ws.send(JSON.stringify(message));
+};
+
+export const onMessage = (
+  event: string | Opcodes,
+  listener: MessageListener
+): (() => void) => {
+  if (!state.messageListeners[event]) {
+    state.messageListeners[event] = [];
+  }
+  state.messageListeners[event].push(listener);
+
+  return () => {
+    state.messageListeners[event] = state.messageListeners[event].filter(
+      (l) => l !== listener
+    );
   };
+};
 
-  socket.addEventListener("close", (error) => {
-    console.log(error);
-    if (error.code === 4001 || error.code === 4004) {
-      socket.close();
-      onClearTokens();
-    } else if (error.code === 4003) {
-      socket.close();
-      onConnectionTaken();
-    }
+export const disconnect = () => {
+  if (state.ws) {
+    state.ws.close();
+  }
+  cleanup();
+};
 
-    if (!waitToReconnect) {
-      throw error;
-    }
-  });
-
-  socket.addEventListener("message", (e) => {
-    if (e.data === "pong" || e.data === '"pong"') {
-      logger("in", "pong");
-      return;
-    }
-
-    const message = JSON.parse(e.data);
-    logger("in", message.op, message.p, message.ref, e.data);
-
-    listeners
-      .filter(({ opcode }) => opcode === message.op)
-      .forEach((listener) =>
-        listener.handler(message.p || message.d, message.ref)
-      );
-  });
-
-  const startHeartbeat = () => {
-    const id = setInterval(() => {
-      if (socket.readyState === WebSocket.CLOSED) {
-        clearInterval(id);
-      } else {
-        socket.send("ping");
-        logger("out", "ping");
-      }
-    }, heartbeatInterval);
-  };
-
-  socket.addEventListener("open", () => {
-    startHeartbeat();
-  });
-
-  const addListener = <T = unknown>(
-    opcode: string,
-    handler: (data: T, ref?: string) => void
-  ) => {
-    const listener: Listener<T> = { opcode, handler };
-    listeners.push(listener);
-    return () => listeners.splice(listeners.indexOf(listener), 1);
-  };
-
-  return {
-    send,
-    addListener,
-    sendCall: <T = unknown>(
-      opcode: string,
-      data: unknown,
-      doneOpcode?: string
-    ): Promise<T> =>
-      new Promise((resolve, reject) => {
-        if (socket.readyState !== WebSocket.OPEN) {
-          reject(new Error("websocket not connected"));
-          return;
-        }
-
-        const ref = !doneOpcode && generateUuid();
-        const unsubscribe = addListener(
-          doneOpcode ?? `${opcode}:reply`,
-          (response: T, arrivedRef) => {
-            if (!doneOpcode && arrivedRef !== ref) return;
-            unsubscribe();
-            resolve(response);
-          }
-        );
-
-        send(opcode, data, ref || undefined);
-      }),
-    close: () => socket.close(),
-  };
+export const isConnected = (): boolean => {
+  return state.ws?.readyState === WebSocket.OPEN;
 };

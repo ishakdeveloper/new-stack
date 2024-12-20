@@ -98,9 +98,24 @@ export const guildRoutes = new Elysia()
   // Fetch all guilds the user is part of
   .get("/guilds", async ({ user }) => {
     const userGuilds = await db
-      .select()
+      .select({
+        guilds: {
+          id: guilds.id,
+          name: guilds.name,
+          iconUrl: guilds.iconUrl,
+          ownerId: guilds.ownerId,
+          createdAt: guilds.createdAt,
+          updatedAt: guilds.updatedAt,
+          defaultChannelId: channels.id,
+        },
+        guildMembers: guildMembers,
+      })
       .from(guilds)
       .leftJoin(guildMembers, eq(guildMembers.guildId, guilds.id))
+      .leftJoin(
+        channels,
+        and(eq(channels.guildId, guilds.id), eq(channels.name, "General"))
+      )
       .where(eq(guildMembers.userId, user?.id ?? ""));
 
     return userGuilds;

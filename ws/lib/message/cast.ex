@@ -1,37 +1,34 @@
 defmodule WS.Message.Cast do
   @moduledoc """
-  API contract statement for cast message modules
-
-  If this route can be used without authorization, set the
-  `:needs_auth` keyword parameter to false.
+  Defines a one-way message from client to server.
+  Example: Status updates, typing indicators.
   """
 
   defmacro __using__(opts) do
-    # needs_auth defaults to true
-    auth_check =
-      opts
-      |> Keyword.get(:needs_auth, true)
-      |> auth_check()
-
     quote do
       use Ecto.Schema
       import Ecto.Changeset
+      use WS.Message.Types.Operator
 
       @behaviour WS.Message.Cast
 
       Module.register_attribute(__MODULE__, :directions, accumulate: true, persist: true)
       @directions [:inbound]
 
-      unquote(auth_check)
-      unquote(schema_ast(opts))
+      # Get opcode from module attribute or options
+      @opcode unquote(opts[:opcode]) || raise "Cast messages must specify an opcode"
 
-      # default, overrideable intializer value
+      unquote(auth_check(Keyword.get(opts, :needs_auth, true)))
+      unquote(schema_ast(opts))
 
       @impl true
       def initialize(_state), do: struct(__MODULE__)
+
+      @impl true
+      def opcode, do: @opcode
+
       defoverridable initialize: 1
 
-      # verify compile-time guarantees
       @after_compile WS.Message.Cast
     end
   end
@@ -40,16 +37,13 @@ defmodule WS.Message.Cast do
   alias Ecto.Changeset
 
   @callback auth_check(SocketHandler.state()) :: :ok | {:error, :auth}
-
-  @callback changeset(struct | nil, WS.json()) :: Ecto.Changeset.t()
-
+  @callback changeset(struct | nil, map()) :: Changeset.t()
   @callback initialize(SocketHandler.state()) :: struct()
-
+  @callback opcode() :: integer()
   @callback execute(Changeset.t(), SocketHandler.state()) ::
               {:noreply, SocketHandler.state()}
               | {:error, map, SocketHandler.state()}
               | {:error, Changeset.t()}
-              | {:exit, code :: 1000..9999, reason :: String.t()}
 
   def __after_compile__(%{module: module}, _bin) do
     # checks to make sure you've either declared a schema module, or you have

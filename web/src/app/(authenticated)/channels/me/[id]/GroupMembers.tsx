@@ -8,7 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useChatStore } from "@/stores/useChatStore";
 import { Users } from "lucide-react";
 import { useState } from "react";
-import UserProfilePopup from "@/app/(authenticated)/channels/components/UserProfilePopup";
+import UserProfilePopup from "@/app/(authenticated)/channels/UserProfilePopup";
 
 const GroupMembers = () => {
   const session = authClient.useSession();

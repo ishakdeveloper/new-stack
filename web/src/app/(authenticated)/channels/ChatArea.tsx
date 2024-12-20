@@ -19,7 +19,7 @@ import {
 import { useUserStore } from "@/stores/useUserStore";
 import UserProfilePopup from "./UserProfilePopup";
 import { PopoverTrigger, Popover } from "@/components/ui/popover";
-import { useSocket } from "@/providers/SocketProvider";
+import { Opcodes, useSocket } from "@/providers/SocketProvider";
 
 const ChatArea = () => {
   const currentGuildId = useGuildStore((state) => state.currentGuildId);
@@ -30,10 +30,13 @@ const ChatArea = () => {
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [userProfileOpen, setUserProfileOpen] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement | null>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout>();
+  const [typingUsers, setTypingUsers] = useState<{ [key: string]: string }>({});
   const {
     sendMessage: sendSocketMessage,
     lastMessage,
     isConnected,
+    onMessage,
   } = useSocket();
 
   const scrollToBottom = () => {
@@ -79,9 +82,12 @@ const ChatArea = () => {
 
       // Send websocket message
       sendSocketMessage({
-        op: "chat_message",
-        guild_id: currentGuildId ?? "",
-        content: message,
+        op: Opcodes.MessageCreate,
+        d: {
+          guild_id: currentGuildId ?? "",
+          channel_id: currentChannelId ?? "",
+          content: message,
+        },
       });
 
       scrollToBottom();
@@ -103,31 +109,62 @@ const ChatArea = () => {
   };
 
   useEffect(() => {
-    if (lastMessage) {
-      try {
-        if (
-          lastMessage.data.type === "message_received" ||
-          lastMessage.data.type === "user_joined_guild" ||
-          lastMessage.data.type === "user_left_guild"
-        ) {
-          queryClient.invalidateQueries({
-            queryKey: ["messages", currentChannelId],
-          });
+    const unsubscribeMessageCreate = onMessage("message_create", (payload) => {
+      queryClient.invalidateQueries({
+        queryKey: ["messages", currentChannelId],
+      });
+      scrollToBottom();
+    });
 
-          scrollToBottom();
-        }
-      } catch (error) {
-        console.error("Failed to parse message:", error);
-      }
-    }
+    const unsubscribeStartTyping = onMessage("start_typing", (payload) => {
+      if (payload.user_id === currentUser?.id) return;
 
-    scrollToBottom();
-  }, [lastMessage, queryClient, currentChannelId]);
+      setTypingUsers((prev) => ({
+        ...prev,
+        [payload.user_id]: payload.user_id,
+      }));
+
+      // Remove user from typing after 5 seconds
+      setTimeout(() => {
+        setTypingUsers((prev) => {
+          const newTyping = { ...prev };
+          delete newTyping[payload.user_id];
+          return newTyping;
+        });
+      }, 5000);
+    });
+
+    return () => {
+      unsubscribeMessageCreate();
+      unsubscribeStartTyping();
+    };
+  }, [onMessage, queryClient, currentChannelId, currentUser?.id]);
 
   // Scroll to the bottom when the component first mounts
   useEffect(() => {
     scrollToBottom();
   }, []);
+
+  const handleStartTyping = () => {
+    // Clear existing timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    // Send typing indicator
+    sendSocketMessage({
+      op: Opcodes.StartTyping,
+      d: {
+        guild_id: currentGuildId ?? "",
+        channel_id: currentChannelId ?? "",
+      },
+    });
+
+    // Set new timeout
+    typingTimeoutRef.current = setTimeout(() => {
+      typingTimeoutRef.current = undefined;
+    }, 5000); // Stop typing after 5 seconds of no input
+  };
 
   return (
     <div className="flex-grow flex flex-col">
@@ -137,7 +174,7 @@ const ChatArea = () => {
       </div>
       <ScrollArea className="flex-grow p-4">
         <div className="flex flex-col-reverse">
-          {messages?.data?.map((message) =>
+          {messages?.data?.map((message: any) =>
             message.isSystem ? (
               <div key={message.id} className="mb-4">
                 <div className="flex items-center mb-1">
@@ -270,11 +307,19 @@ const ChatArea = () => {
         <div ref={scrollAreaRef}></div>
       </ScrollArea>
       <div className="p-4 border-t">
+        {Object.keys(typingUsers).length > 0 && (
+          <div className="text-sm text-muted-foreground mb-2">
+            Someone is typing...
+          </div>
+        )}
         <form onSubmit={handleSendMessage}>
           <Input
             placeholder={`Message #${channel?.data?.slug}`}
             value={message}
-            onChange={(e) => setMessage(e.target.value)}
+            onChange={(e) => {
+              setMessage(e.target.value);
+              handleStartTyping();
+            }}
           />
         </form>
       </div>

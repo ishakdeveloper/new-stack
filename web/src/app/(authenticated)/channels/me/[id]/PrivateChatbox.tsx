@@ -9,21 +9,27 @@ import { client } from "@/utils/client";
 import { authClient } from "@/utils/authClient";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useRef, useEffect } from "react";
-import { useSocket } from "@/providers/SocketProvider";
+import { Opcodes, useSocket } from "@/providers/SocketProvider";
 import { useChatStore } from "@/stores/useChatStore";
 import GroupMembers from "./GroupMembers";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
-import { SelectGroupMembers } from "../../components/SelectGroupMembers";
+import { SelectGroupMembers } from "../SelectGroupMembers";
+import { useUserStore } from "@/stores/useUserStore";
+
 const PrivateChatbox = ({ slug }: { slug: string }) => {
   const [userInput, setUserInput] = useState("");
   const queryClient = useQueryClient();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const session = authClient.useSession();
-  const { sendMessage: sendSocketMessage, lastMessage } = useSocket();
+  const { sendMessage: sendSocketMessage, onMessage } = useSocket();
   const oneOnOnePartner = useChatStore((state) => state.oneOnOnePartner);
   const currentChatId = useChatStore((state) => state.currentChatId);
   const router = useRouter();
+  const [typingUsers, setTypingUsers] = useState<{ [key: string]: string }>({});
+  const currentUser = useUserStore((state) => state.currentUser);
+  const [message, setMessage] = useState("");
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "instant" });
@@ -51,6 +57,36 @@ const PrivateChatbox = ({ slug }: { slug: string }) => {
     enabled: !!currentChatId,
   });
 
+  const { mutate: sendApiMessage } = useMutation({
+    mutationKey: ["sendMessage", currentChatId],
+    mutationFn: () => {
+      if (!message || message.trim() === "") {
+        throw new Error("Message cannot be empty");
+      }
+      return client.api
+        .conversations({ id: currentChatId ?? "" })
+        .messages.post({ content: message });
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ["messages", currentChatId],
+      });
+
+      // Send websocket message
+      sendSocketMessage({
+        op: Opcodes.MessageCreate,
+        d: {
+          channel_id: currentChatId ?? "",
+          content: message,
+        },
+      });
+
+      scrollToBottom();
+
+      setMessage(""); // Clear input after sending
+    },
+  });
+
   const getConversationName = (conversation: any) => {
     if (conversation.isGroup) {
       // For group chats, join all participant names
@@ -64,57 +100,11 @@ const PrivateChatbox = ({ slug }: { slug: string }) => {
     }
   };
 
-  const sendMessage = useMutation({
-    mutationFn: async (content: string) => {
-      return client.api
-        .conversations({ id: currentChatId ?? "" })
-        .messages.post({
-          content,
-        });
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["messages", currentChatId] });
-
-      if (conversation?.isGroup) {
-        sendSocketMessage({
-          op: "send_group_message",
-          group_id: currentChatId ?? "",
-        });
-      } else {
-        sendSocketMessage({
-          op: "send_private_message",
-          to_user_id: oneOnOnePartner[currentChatId ?? ""] ?? "",
-        });
-      }
-    },
-  });
-
-  const leaveGroupMutation = useMutation({
-    mutationFn: async () => {
-      return client.api
-        .conversations({ id: currentChatId ?? "" })
-        .leave.delete();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["messages", currentChatId] });
-      queryClient.invalidateQueries({ queryKey: ["dmUsers", currentChatId] });
-      queryClient.invalidateQueries({
-        queryKey: ["conversations", session.data?.user?.id],
-      });
-
-      sendSocketMessage({
-        op: "leave_group",
-        group_id: currentChatId ?? "",
-      });
-
-      router.push("/channels/me");
-    },
-  });
-
-  const handleSendMessage = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSendMessage = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    sendMessage.mutate(userInput);
-    setUserInput("");
+    if (!message || message.trim() === "") return; // Don't send empty messages
+
+    await sendApiMessage();
   };
 
   useEffect(() => {
@@ -122,37 +112,69 @@ const PrivateChatbox = ({ slug }: { slug: string }) => {
   }, [messages]);
 
   useEffect(() => {
-    if (lastMessage) {
-      try {
-        if (
-          lastMessage.data.type === "private_message_received" ||
-          lastMessage.data.type === "group_message_received"
-        ) {
-          queryClient.invalidateQueries({
-            queryKey: ["messages", currentChatId],
-          });
+    const unsubscribeMessageCreate = onMessage("message_create", (payload) => {
+      queryClient.invalidateQueries({
+        queryKey: ["messages", currentChatId],
+      });
+      scrollToBottom();
+    });
 
-          scrollToBottom();
-        } else if (
-          lastMessage.data.op === "channel_user_added" ||
-          lastMessage.data.op === "channel_user_removed"
-        ) {
-          queryClient.invalidateQueries({
-            queryKey: ["dmUsers", currentChatId],
-          });
+    const unsubscribeStartTyping = onMessage("start_typing", (payload) => {
+      if (payload.user_id === currentUser?.id) return;
 
-          queryClient.invalidateQueries({
-            queryKey: ["messages", currentChatId],
-          });
-        }
-      } catch (error) {
-        console.error("Failed to parse message:", error);
+      setTypingUsers((prev) => ({
+        ...prev,
+        [payload.user_id]: payload.user_id,
+      }));
+
+      // Clear previous timeout for this user
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
       }
-    }
-  }, [lastMessage]);
 
-  const handleLeaveGroup = async () => {
-    await leaveGroupMutation.mutate();
+      // Set new timeout to clear typing indicator
+      typingTimeoutRef.current = setTimeout(() => {
+        setTypingUsers((prev) => {
+          const newState = { ...prev };
+          delete newState[payload.user_id];
+          return newState;
+        });
+      }, 3000);
+    });
+
+    return () => {
+      unsubscribeMessageCreate();
+      unsubscribeStartTyping();
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+    };
+  }, [onMessage, queryClient, currentChatId, currentUser?.id]);
+
+  const handleStartTyping = () => {
+    sendSocketMessage({
+      op: Opcodes.StartTyping,
+      d: {
+        channel_id: currentChatId,
+      },
+    });
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setMessage(e.target.value);
+    handleStartTyping();
+  };
+
+  const handleLeaveGroup = () => {
+    if (!currentChatId) return;
+
+    sendSocketMessage({
+      op: Opcodes.ChannelLeave,
+      d: {
+        channel_id: currentChatId,
+      },
+    });
+    router.push("/channels/me");
   };
 
   return (
@@ -243,13 +265,22 @@ const PrivateChatbox = ({ slug }: { slug: string }) => {
           <div ref={messagesEndRef} />
         </ScrollArea>
         <div className="p-4 border-t">
+          {Object.keys(typingUsers).length > 0 && (
+            <div className="text-sm text-muted-foreground mb-2">
+              {Object.keys(typingUsers).length === 1
+                ? "Someone is typing..."
+                : "Several people are typing..."}
+            </div>
+          )}
           <form onSubmit={handleSendMessage}>
             <Input
               placeholder={`Message ${
                 conversation && getConversationName(conversation)
               }`}
-              value={userInput}
-              onChange={(e) => setUserInput(e.target.value)}
+              value={message}
+              onChange={handleInputChange}
+              required
+              minLength={1}
             />
           </form>
         </div>

@@ -44,7 +44,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { DeleteServerModal } from "./DeleteServerModal";
 import { Switch } from "@/components/ui/switch";
-import { useSocket } from "@/providers/SocketProvider";
+import { Opcodes, useSocket } from "@/providers/SocketProvider";
 
 const ChannelSidebar = () => {
   const router = useRouter();
@@ -169,9 +169,30 @@ const ChannelSidebar = () => {
   }, [searchParams, setCurrentChannelId]);
 
   const handleChannelClick = (channelId: string) => {
+    if (currentChannelId === channelId) {
+      return;
+    }
+
+    if (currentChannelId) {
+      sendMessage({
+        op: Opcodes.ChannelLeave,
+        d: {
+          channel_id: currentChannelId,
+        },
+      });
+    }
+
     setCurrentChannelId(channelId);
     setLastVisitedChannel(currentGuildId ?? "", channelId);
     router.push(`/channels/${currentGuildId}/${channelId}`);
+
+    sendMessage({
+      op: Opcodes.ChannelJoin,
+      d: {
+        guild_id: currentGuildId ?? "",
+        channel_id: channelId,
+      },
+    });
   };
 
   const handleCreateChannel = (e: React.FormEvent) => {
