@@ -7,13 +7,27 @@ defmodule WS.Application do
 
   @impl true
   def start(_type, _args) do
+    import Supervisor.Spec, warn: false
+
+    :ets.new(:ws_connections, [:named_table, :public, :set])
+
+    WS.Metric.PrometheusExporter.setup()
+    WS.Metric.PipelineInstrumenter.setup()
+    WS.Metric.UserSessions.setup()
+
     children = [
-      WS.Message.PubSub,
+      WS.Workers.Supervisors.RegistrySupervisor,
       WS.Workers.Supervisors.UserSessionSupervisor,
+      WS.Workers.SessionStore,
+      WS.Workers.Supervisors.RabbitSupervisor,
+      WS.PubSub,
       WS.Workers.Supervisors.ChatSupervisor,
       WS.Workers.Supervisors.GuildSessionSupervisor,
       WS.Workers.Supervisors.ChannelSupervisor,
-      {Plug.Cowboy, scheme: :http, plug: WS, options: [port: 4001, dispatch: dispatch()]}
+      {WS.Workers.Presence, []},
+      WS.Workers.Telemetry,
+      {Plug.Cowboy, scheme: :http, plug: WS, options: [port: 4001, dispatch: dispatch(), protocol_options: [idle_timeout: :infinity]]},
+
     ]
 
     opts = [strategy: :one_for_one, name: WS.Supervisor]
@@ -28,10 +42,11 @@ defmodule WS.Application do
     Plug.Conn.send_resp(conn, 404, "Not Found")
   end
 
-  def dispatch do
+  defp dispatch do
     [
       {:_, [
-        {"/ws", WS.Message.SocketHandler, []}
+        {"/ws", WS.Message.SocketHandler, []},
+        {:_, Plug.Cowboy.Handler, {WS.Router, []}}
       ]}
     ]
   end

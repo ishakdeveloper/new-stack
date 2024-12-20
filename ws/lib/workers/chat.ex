@@ -31,6 +31,7 @@ defmodule WS.Workers.Chat do
 
     case DynamicSupervisor.start_child(WS.Workers.Supervisors.ChatSupervisor, {__MODULE__, Map.merge(initial_values, %{callers: callers})}) do
       {:ok, pid} ->
+        Logger.debug("Chat session started, pid: #{inspect(pid)}")
         # ensures that the chat dies alongside the guild
         Process.link(pid)
         {:ok, pid}
@@ -134,4 +135,23 @@ defmodule WS.Workers.Chat do
   def handle_cast({:send_message, payload}, state), do: send_message_impl(state, payload)
   def handle_cast({:add_user, user_id}, state), do: add_user_impl(user_id, state)
   def handle_cast({:remove_user, user_id}, state), do: remove_user_impl(user_id, state)
+end
+
+defmodule WS.Workers.Supervisors.ChatSupervisor do
+  use Supervisor
+  require Logger
+
+  def start_link(init_arg) do
+    Logger.debug("Starting chat supervisor")
+    Supervisor.start_link(__MODULE__, init_arg)
+  end
+
+  def init(init_arg) do
+    children = [
+      {Registry, keys: :unique, name: WS.Workers.ChatRegistry},
+      {DynamicSupervisor, name: WS.Workers.Supervisors.ChatSupervisor, strategy: :one_for_one}
+    ]
+
+    Supervisor.init(children, strategy: :one_for_one)
+  end
 end

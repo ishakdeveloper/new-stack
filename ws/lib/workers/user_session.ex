@@ -3,124 +3,244 @@ defmodule WS.Workers.UserSession do
   require Logger
 
   alias WS.PubSub
-  alias WS.Room
-  alias WS.SessionSupervisor
-  alias WS.Guild
 
   defmodule State do
     @type t :: %__MODULE__{
             user_id: String.t(),
-            pid: pid()
+            pid: pid() | nil,
+            active_ws: pid() | nil,
+            current_channel_id: String.t() | nil,
+            presence: map()
           }
 
     defstruct user_id: nil,
-              pid: nil
+              pid: nil,
+              active_ws: nil,
+              current_channel_id: nil,
+              presence: %{status: "offline"}
   end
 
   def child_spec(init) do
     %{super(init) | id: Keyword.get(init, :user_id)}
   end
 
-  def start_link(init) do
-    GenServer.start_link(__MODULE__, init, name: via_tuple(init[:user_id]))
+  def start_link(opts) do
+    user_id = Keyword.fetch!(opts, :user_id)
+    GenServer.start_link(__MODULE__, opts, name: via_tuple(user_id))
   end
 
-  def via_tuple(user_id), do: {:via, Registry, {WS.Workers.UserSessionRegistry, user_id}}
+  def via_tuple(user_id) do
+    {:via, Registry, {WS.Workers.UserSessionRegistry, user_id}}
+  end
+
+  def lookup(user_id), do: Registry.lookup(WS.Workers.UserSessionRegistry, user_id)
+  def count, do: Registry.count(WS.Workers.UserSessionRegistry)
 
   defp cast(user_id, message), do: GenServer.cast(via_tuple(user_id), message)
   defp call(user_id, message), do: GenServer.call(via_tuple(user_id), message)
 
-  @impl true
-  def init(state) do
-    log_state_change("Initial state", struct(State, state))
-    Process.put(:"$callers", Keyword.get(state, :callers))
-    {:ok, struct(State, state)}
-  end
+  def register_user(opts) do
+    user_id = Keyword.get(opts, :user_id)
+    Logger.debug("Registering user #{user_id}")
 
-  # Helper function to log state changes with safe key access
-  defp log_state_change(action, %State{user_id: user_id, pid: pid}) do
-    Logger.info("""
-    User Session State Change - #{action}
-    ============================
-    User ID: #{inspect(user_id)}
-    PID: #{inspect(pid)}
-    ============================
-    """)
-  end
-
-  def register_user(initial_values) do
-    Logger.debug("Registering user #{inspect(initial_values)}")
-    callers = [self() | Process.get(:"$callers", [])]
-    user_id = Keyword.get(initial_values, :user_id)
-
-    case DynamicSupervisor.start_child(
-      WS.Workers.Supervisors.UserSessionSupervisor,
-      {__MODULE__, Keyword.merge(initial_values, callers: callers)}
-    ) do
-      {:ok, _pid} ->
-        :ok
-      {:error, {:already_started, pid}} ->
-        Logger.debug("User session already started, pid: #{inspect(pid)}")
-        {:ok, pid}  # Or handle the case as appropriate
-      {:error, reason} ->
-        Logger.error("Failed to start user session: #{inspect(reason)}")
-        {:error, reason}
+    case Registry.lookup(WS.Workers.UserSessionRegistry, user_id) do
+      [] ->
+        Logger.debug("Starting new user session for #{user_id}")
+        DynamicSupervisor.start_child(
+          WS.Workers.Supervisors.UserSessionSupervisor,
+          {__MODULE__, opts}
+        )
+      [{pid, _}] ->
+        Logger.debug("Session exists for #{user_id} with PID: #{inspect(pid)}")
+        {:ok, pid}
     end
   end
 
   def remove_user(user_id) do
-    GenServer.stop(via_tuple(user_id))
+    case Registry.lookup(WS.Workers.UserSessionRegistry, user_id) do
+      [] -> :ok
+      [{pid, _}] ->
+        GenServer.stop(pid)
+    end
   end
 
   def set_state(user_id, info), do: cast(user_id, {:set_state, info})
-
-  defp set_state_impl(info, state) do
-    {:noreply, %{state | user_id: info.id}}
+  def set_active_ws(user_id, ws_pid) do
+    GenServer.call(via_tuple(user_id), {:set_active_ws, ws_pid})
   end
 
-  def set_active_ws(user_id, pid), do: call(user_id, {:set_active_ws, pid})
+  def send_ws(user_id, message) do
+    Logger.debug("Looking up WebSocket connection for user #{user_id}")
 
-  defp set_active_ws(pid, _reply, %State{pid: old_pid} = state) do
-    if old_pid && Process.alive?(old_pid) do
-
-      Process.exit(old_pid, :normal)
+    case :ets.lookup(:ws_connections, user_id) do
+      [{^user_id, pid}] ->
+        Logger.debug("Found WebSocket connection #{inspect(pid)} for user #{user_id}")
+        if Process.alive?(pid) do
+          send(pid, {:remote_send, message})
+          :ok
+        else
+          Logger.error("WebSocket connection found but process is dead for user #{user_id}")
+          :ets.delete(:ws_connections, user_id)
+          {:error, :dead_socket}
+        end
+      [] ->
+        Logger.error("No WebSocket connection found for user #{user_id}")
+        {:error, :no_socket}
     end
-
-    Process.monitor(pid)
-
-    {:reply, :ok, %{state | pid: pid}}
   end
 
-  def send_ws(user_id, payload) do
-    cast(user_id, {:send_ws, payload})
+  def update_presence(user_id, presence), do: cast(user_id, {:update_presence, presence})
+  def get_presence(user_id), do: call(user_id, :get_presence)
+
+  @impl true
+  def init(opts) do
+    user_id = Keyword.fetch!(opts, :user_id)
+
+    Logger.info("""
+    User Session State Change - Initial state
+    ============================
+    User ID: #{inspect(user_id)}
+    Active WS: nil
+    ============================
+    """)
+
+    {:ok, %{user_id: user_id, active_ws: nil, previous_ws: nil}}
   end
-
-  defp send_ws_impl(payload, %State{pid: pid} = state) do
-    if pid, do: WS.Message.SocketHandler.remote_send(pid, payload)
-    {:noreply, state}
-  end
-
-  defp handle_disconnect(pid, state) do
-    Logger.debug("Handling disconnect for pid: #{inspect(pid)}")
-    {:stop, :normal, state}
-  end
-
-  defp handle_disconnect(_, state), do: {:noreply, state}
-
-  # Callbacks
-
-  def handle_cast({:set_state, info}, state), do: set_state_impl(info, state)
-  def handle_call({:set_active_ws, pid}, reply, state), do: set_active_ws(pid, reply, state)
-  def handle_info({:DOWN, _, :process, pid, _}, state), do: handle_disconnect(pid, state)
 
   @impl true
   def handle_cast(:remove_user, %State{user_id: user_id} = state) do
     Logger.debug("Handling remove_user call, state: #{inspect(state)}")
     PubSub.unsubscribe("user:#{user_id}")
-    log_state_change("User removed", struct(State, state))
-    {:stop, :normal, :ok, state}
+    log_state_change("User removed", state)
+    {:stop, :normal, state}
   end
 
-  def handle_cast({:send_ws, payload}, state), do: send_ws_impl(payload, state)
+  def handle_cast({:set_state, info}, state) do
+    {:noreply, %{state | user_id: info.id}}
+  end
 
+  def handle_cast({:send_ws, message}, %State{active_ws: pid, user_id: user_id} = state) when is_pid(pid) do
+    Logger.debug("Sending message to WebSocket #{inspect(pid)} for user #{user_id}: #{inspect(message)}")
+    if Process.alive?(pid) do
+      WS.Message.SocketHandler.remote_send(pid, message)
+      {:noreply, state}
+    else
+      Logger.warn("WebSocket #{inspect(pid)} is dead for user #{user_id}")
+      {:noreply, %{state | active_ws: nil}}
+    end
+  end
+
+  def handle_cast({:send_ws, message}, state) do
+    Logger.warn("No active WebSocket for user #{state.user_id}, message dropped: #{inspect(message)}")
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_call({:set_active_ws, new_ws_pid}, _from, state) do
+    if state.active_ws && state.active_ws != new_ws_pid do
+      # Close previous connection if it exists and is different
+      Logger.debug("Closing previous WebSocket connection for user #{state.user_id}")
+      try do
+        Process.send(state.active_ws, :close, [])
+      catch
+        :error, :noproc -> :ok
+      end
+    end
+
+    Logger.debug("Setting active WS for user #{state.user_id} to #{inspect(new_ws_pid)}")
+
+    {:reply, :ok, %{state |
+      previous_ws: state.active_ws,
+      active_ws: new_ws_pid
+    }}
+  end
+
+  @impl true
+  def handle_info({:DOWN, _ref, :process, pid, _reason}, %State{active_ws: pid} = state) do
+    Logger.debug("WebSocket connection down: #{inspect(pid)}")
+
+    # Set presence to offline and update global Presence
+    presence = %{status: "offline"}
+    WS.Workers.Presence.update_presence(state.user_id, presence)
+
+    new_state = %{state |
+      active_ws: nil,
+      presence: presence
+    }
+    log_state_change("Connection down", new_state)
+    {:noreply, new_state}
+  end
+
+  def handle_info({:DOWN, _ref, :process, _pid, _reason}, state) do
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_cast({:handle_new_connection, new_pid}, state) do
+    Logger.debug("Handling new connection request from #{inspect(new_pid)}")
+    # Kill the old connection
+    if state.active_ws && Process.alive?(state.active_ws) do
+      Process.exit(state.active_ws, :normal)
+    end
+    # Monitor the new connection
+    Process.monitor(new_pid)
+
+    # Set initial presence to online and update global Presence
+    presence = %{status: "online"}
+    WS.Workers.Presence.update_presence(state.user_id, presence)
+
+    new_state = %{state |
+      active_ws: new_pid,
+      pid: new_pid,
+      presence: presence
+    }
+    log_state_change("New connection", new_state)
+    {:noreply, new_state}
+  end
+
+  def handle_cast({:update_presence, presence}, state) do
+    # Update presence in both UserSession and global Presence
+    WS.Workers.Presence.update_presence(state.user_id, presence)
+    new_state = %{state | presence: presence}
+    log_state_change("Presence updated", new_state)
+    {:noreply, new_state}
+  end
+
+  # Helper function to log state changes with safe key access
+  defp log_state_change(action, %State{} = state) do
+    Logger.info("""
+    User Session State Change - #{action}
+    ============================
+    User ID: #{inspect(state.user_id)}
+    PID: #{inspect(state.pid)}
+    Active WS: #{inspect(state.active_ws)}
+    ============================
+    """)
+  end
+end
+
+defmodule WS.Workers.Supervisors.UserSessionSupervisor do
+  use DynamicSupervisor
+  require Logger
+
+  @moduledoc """
+  A DynamicSupervisor to manage user session processes.
+  """
+
+  def start_link(init_arg) do
+    Logger.debug("Starting Session supervisor")
+    Supervisor.start_link(__MODULE__, init_arg)
+  end
+
+  @impl true
+  def init(_init_arg) do
+    Logger.debug("Initializing Session supervisor")
+
+    children = [
+      {Registry, keys: :unique, name: WS.Workers.UserSessionRegistry},
+      {DynamicSupervisor, name: WS.Workers.Supervisors.UserSessionSupervisor, strategy: :one_for_one}
+    ]
+
+    Supervisor.init(children, strategy: :one_for_one)
+  end
 end

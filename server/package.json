@@ -21,6 +21,7 @@
     "@lenoux01/lean-logs": "^1.1.0",
     "@repo/server": "workspace:*",
     "@trpc/server": "^10.45.2",
+    "amqplib": "^0.10.5",
     "better-auth": "^1.0.7",
     "drizzle-orm": "^0.36.4",
     "drizzle-typebox": "^0.1.1",
@@ -30,6 +31,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@types/amqplib": "^0.10.6",
     "@types/pg": "^8.11.10",
     "bun-types": "latest",
     "drizzle-kit": "^0.28.1"

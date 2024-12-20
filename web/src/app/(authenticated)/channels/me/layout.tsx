@@ -1,6 +1,6 @@
 import React from "react";
-import ConversationSidebar from "./components/ConversationSidebar";
-import FriendsList from "./components/FriendsList";
+import ConversationSidebar from "./ConversationSidebar";
+import FriendsList from "./FriendsList";
 import {
   dehydrate,
   HydrationBoundary,

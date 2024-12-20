@@ -2,7 +2,7 @@
 
 import React, { useEffect } from "react";
 import { useGuildStore } from "@/stores/useGuildStore";
-import ChatArea from "../../components/ChatArea";
+import ChatArea from "../../ChatArea";
 import { useSocket } from "@/providers/SocketProvider";
 
 export default function ChannelPage({

@@ -3,18 +3,15 @@ import { cors } from "@elysiajs/cors";
 import swagger from "@elysiajs/swagger";
 import { auth } from "./lib/auth";
 import { authRoutes } from "./modules/auth";
-import { guildRoutes } from "./modules/guilds";
-import { inviteRoutes } from "./modules/invite";
-import { friendshipRoutes } from "./modules/friends";
-import {
-  directMessageRoutes,
-  groupDmRoutes,
-  guildChannelRoutes,
-} from "./modules/messages";
-import { channelRoutes } from "./modules/channels";
-import { conversationRoutes } from "./modules/conversations";
-import { userRoutes } from "./modules/user";
-import { notificationsRoutes } from "./modules/notifications";
+import { guildRoutes } from "./modules/guilds/guilds";
+import { inviteRoutes } from "@/modules/invites/invite";
+import { friendshipRoutes } from "@/modules/friends/friends";
+import { channelRoutes } from "@/modules/guilds/channels";
+import { conversationRoutes } from "@/modules/conversations/conversationRoutes";
+import { userRoutes } from "@/modules/user";
+import { notificationsRoutes } from "@/modules/notifications/notifications";
+import { guildMessageChannelRoutes } from "./modules/messages/messages";
+import { rabbitMQ } from "./lib/rabbitmq";
 
 const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(",") || [];
 
@@ -36,33 +33,47 @@ const validateOrigin = (request: Request) => {
   return false;
 };
 
-export const app = new Elysia()
-  .use(
-    cors({
-      origin: validateOrigin,
-      credentials: true,
-    })
-  )
-  .use(swagger())
-  .group("/api", (app) =>
-    app
-      .use(authRoutes)
-      .use(userRoutes)
-      .use(guildRoutes)
-      .use(inviteRoutes)
-      .use(friendshipRoutes)
-      .use(directMessageRoutes)
-      .use(guildChannelRoutes)
-      .use(groupDmRoutes)
-      .use(channelRoutes)
-      .use(conversationRoutes)
-      .use(notificationsRoutes)
-  )
-  .all("/api/auth/*", betterAuthView)
-  .listen(4000);
+const start = async () => {
+  try {
+    await rabbitMQ.initialize();
 
-export type App = typeof app;
+    const app = new Elysia()
+      .use(
+        cors({
+          origin: validateOrigin,
+          credentials: true,
+        })
+      )
+      .use(swagger())
+      .group("/api", (app) =>
+        app
+          .use(authRoutes)
+          .use(userRoutes)
+          .use(guildRoutes)
+          .use(inviteRoutes)
+          .use(friendshipRoutes)
+          .use(guildMessageChannelRoutes)
+          .use(channelRoutes)
+          .use(conversationRoutes)
+          .use(notificationsRoutes)
+      )
+      .all("/api/auth/*", betterAuthView)
+      .listen(4000);
 
-console.log(
-  `🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`
-);
+    console.log(
+      `🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`
+    );
+    process.on("SIGTERM", async () => {
+      await rabbitMQ.close();
+      process.exit(0);
+    });
+
+    return app;
+  } catch (error) {
+    console.error("Failed to connect to RabbitMQ:", error);
+  }
+};
+
+export type App = Awaited<ReturnType<typeof start>>;
+
+start();

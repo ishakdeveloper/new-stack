@@ -1,201 +1,212 @@
 defmodule WS.Message.SocketHandler do
+  use GenServer
   require Logger
+  alias WS.Message
+  use WS.Message.Types.Operator
 
-  use WS.Message
+  defmodule State do
+    @derive {Jason.Encoder, only: [:user, :compression, :encoding, :presence]}
+    defstruct user: nil,
+              compression: :zlib,
+              encoding: :json,
+              callers: [],
+              session_id: nil,
+              user_id: nil,
+              presence: %{status: "offline"}
 
-  defstruct user: nil,               # Holds the user information (a `WS.User` struct)
-            compression: nil,         # Compression method, e.g., :zlib or nil
-            encoding: :json,          # Encoding format (:json or :etf)
-            callers: []              # Process callers for context (if needed)
-
-  @type state :: %__MODULE__{
-    user: nil | WS.User.t(),
-    compression: nil | :zlib,
-    encoding: :json | :etf,
-    callers: [pid]
-  }
+    @type t :: %__MODULE__{
+      user: map() | nil,
+      compression: :zlib | nil,
+      encoding: :json | :etf,
+      callers: list(),
+      session_id: String.t() | nil,
+      user_id: String.t() | nil,
+      presence: map()
+    }
+  end
 
   @behaviour :cowboy_websocket
 
-  ###############################################################
-  ## Initialization Boilerplate
+  @impl :cowboy_websocket
+  def init(req, _state) do
+    params = :cowboy_req.parse_qs(req)
+    user_id = get_user_id(params)
 
-  def init(request, _state) do
-    props = :cowboy_req.parse_qs(request)
+    Logger.debug("Initializing SocketHandler for user #{user_id}")
+    Logger.debug("Query string parameters: #{inspect(params)}")
 
-    compression =
-      case :proplists.get_value("compression", props) do
-        p when p in ["zlib_json", "zlib"] -> :zlib
-        _ -> nil
-      end
-
-    encoding =
-      case :proplists.get_value("encoding", props) do
-        "etf" -> :etf
-        _ -> :json
-      end
-
-    state = %__MODULE__{
-      compression: compression,
-      encoding: encoding,
-      callers: []
+    state = %State{
+      compression: get_compression(params),
+      encoding: get_encoding(params),
+      user_id: user_id
     }
 
-    Logger.debug("Initial state: #{inspect(state)}")
-    {:cowboy_websocket, request, state}
+    {:cowboy_websocket, req, state}
   end
 
+  @impl :cowboy_websocket
   def websocket_init(state) do
-    Process.put(:"$callers", state.callers)
-
+    Logger.debug("WebSocket initializing with state: #{inspect(state)}")
     {:ok, state}
   end
 
-  ###############################################################
-  ## WebSocket Message Handling
-
-  def websocket_handle({:text, "ping"}, state) do
-    {[text: "pong"], state}
-  end
-
-  # This is for Firefox
-  def websocket_handle({:ping, _}, state) do
-    Logger.debug("Received Firefox ping with state: #{inspect(state)}")
-    {[text: "pong"], state}
-  end
-
-  def websocket_handle({:text, message}, state) do
-
-    case Jason.decode(message) do
-      {:ok, %{"op" => op} = data} ->
-        case handler(op, data, state) do
-          {:reply, {:ok, response}, new_state} ->
-            # Handle reply tuple format
-            formatted_response = %{"status" => "success", "data" => response}
-            remote_send_impl(formatted_response, new_state)
-
-          {:ok, response, new_state} ->
-            # Handle regular tuple format
-            formatted_response = %{"status" => "success", "data" => response}
-            remote_send_impl(formatted_response, new_state)
-
-          {:error, reason, new_state} ->
-            formatted_response = %{"status" => "error", "message" => reason}
-            remote_send_impl(formatted_response, new_state)
-
-          :ok ->
-            # Handle simple :ok response
-            ws_push(nil, state)
-
-          {:ok, new_state} ->
-            # Handle :ok with new state
-            ws_push(nil, new_state)
-        end
-
-      _ ->
-        Logger.error("Invalid message format received")
-        remote_send_impl(%{"status" => "error", "message" => "Invalid message format"}, state)
+  @impl :cowboy_websocket
+  def websocket_handle({:text, data}, state) do
+    case Jason.decode(data) do
+      {:ok, decoded} ->
+        handle_message(decoded, state)
+      {:error, reason} ->
+        Logger.error("Error decoding JSON: #{inspect(reason)}")
+        {:ok, state}
     end
   end
 
-  # unsub from PubSub topic
-  def unsub(socket, topic), do: send(socket, {:unsub, topic})
-
-  defp unsub_impl(topic, state) do
-    PubSub.unsubscribe(topic)
-    ws_push(nil, state)
+  @impl :cowboy_websocket
+  def websocket_handle({:binary, data}, state) do
+    case decompress_message(data) do
+      {:error, reason} ->
+        Logger.error("Error handling binary message: #{inspect(reason)}")
+        {:ok, state}
+      decompressed when is_binary(decompressed) ->
+        case Jason.decode(decompressed) do
+          {:ok, decoded} ->
+            handle_message(decoded, state)
+          {:error, reason} ->
+            Logger.error("Error decoding JSON: #{inspect(reason)}")
+            {:ok, state}
+        end
+    end
   end
 
-  def ws_push(frame, state) do
-    {List.wrap(frame), state}
+  @impl :cowboy_websocket
+  def websocket_handle(data, state) do
+    Logger.warn("Received unexpected WebSocket data: #{inspect(data)}")
+    {:ok, state}
   end
 
-  def remote_send(socket, message) do
-    send(socket, {:remote_send, message})
+  @impl :cowboy_websocket
+  def terminate(_reason, _req, state) do
+    # Session cleanup happens automatically via process monitoring
+    :ok
   end
 
-  defp remote_send_impl(message, state) do
-    ws_push(prepare_socket_msg(message, state), state)
+  @impl :cowboy_websocket
+  def websocket_info({:pubsub, event_type, data} = pubsub_message, state) do
+    response = WS.Messages.PubSub.PubSubEvent.new(pubsub_message)
+    encoded = Jason.encode!(%{
+      "op" => "pubsub_event",
+      "t" => WS.Messages.PubSub.PubSubEvent.event_name(),
+      "d" => response
+    })
+
+    frame_data = case state.compression do
+      :zlib ->
+        try do
+          :zlib.zip(encoded)
+        rescue
+          error ->
+            Logger.error("Error compressing pubsub message: #{inspect(error)}")
+            encoded
+        end
+      _ -> encoded
+    end
+
+    frame_type = if state.compression == :zlib, do: :binary, else: :text
+    {:reply, {frame_type, frame_data}, state}
   end
 
-  def prepare_socket_msg(data, state) do
-    data
-    |> encode_data(state)
-    |> prepare_data(state)
+  def websocket_info(info, state) do
+    Logger.debug("Unhandled websocket_info: #{inspect(info)}")
+    {:ok, state}
   end
 
-  defp encode_data(data, %{encoding: :etf}) do
-    data
-    |> Map.from_struct()
-    |> :erlang.term_to_binary()
+  # Helper functions
+  defp get_user_id(params) do
+    case List.keyfind(params, "user_id", 0) do
+      {_, user_id} -> user_id
+      nil -> nil
+    end
   end
 
-  defp encode_data(data, %{encoding: :json}) do
-    Jason.encode!(data)
+  defp get_compression(params) do
+    case List.keyfind(params, "compression", 0) do
+      {_, "zlib_json"} -> :zlib
+      _ -> nil
+    end
   end
 
-  defp prepare_data(data, %{compression: :zlib}) do
-    z = :zlib.open()
-
-    :zlib.deflateInit(z)
-    data = :zlib.deflate(z, data, :finish)
-    :zlib.deflateEnd(z)
-
-    {:binary, data}
+  defp get_encoding(params) do
+    case List.keyfind(params, "encoding", 0) do
+      {_, "etf"} -> :etf
+      _ -> :json
+    end
   end
 
-  defp prepare_data(data, %{encoding: :etf}) do
-    {:binary, data}
+  defp cleanup_user(user_id) do
+    Logger.debug("Cleaning up for user #{user_id}")
+    # Add any cleanup logic here
+    Logger.debug("No cleanup needed for user #{user_id}")
   end
 
-  defp prepare_data(data, %{encoding: :json}) do
-    {:text, data}
+  # Remote message sending
+  def remote_send(pid, message) when is_pid(pid) do
+    if Process.alive?(pid) do
+      Logger.debug("Sending remote message to #{inspect(pid)}: #{inspect(message)}")
+      send(pid, {:remote_send, message})
+      {:ok, :message_sent}
+    else
+      Logger.error("Cannot send message, PID #{inspect(pid)} is not alive")
+      {:error, :pid_not_alive}
+    end
   end
 
-  @impl true
-  def websocket_info({:EXIT, _, _}, state), do: exit_impl(state)
-  def websocket_info(:exit, state), do: exit_impl(state)
-  def websocket_info({:unsub, topic}, state), do: unsub_impl(topic, state)
-  def websocket_info({:remote_send, payload}, state) do
-    Logger.debug("INFO: Handling remote_send broadcast from #{inspect(payload)}")
-
-    remote_send_impl(payload, state)
+  defp decompress_message(data) do
+    try do
+      :zlib.uncompress(data)
+    rescue
+      error ->
+        Logger.error("Error decompressing message: #{inspect(error)}")
+        {:error, :decompression_failed}
+    end
   end
 
-  def websocket_info({:pubsub, topic, message}, state) do
-    {:reply, {:text, "Message received from #{topic}: #{inspect(message)}"}, state}
+  defp encode_response(response, compression) do
+    encoded = case response do
+      %{__struct__: mod} = struct ->
+        Jason.encode!(%{
+          "op" => mod.opcode(),
+          "t" => mod.event_name(),
+          "d" => Map.from_struct(struct)
+        })
+      _ ->
+        Jason.encode!(response)
+    end
+
+    case compression do
+      :zlib ->
+        try do
+          :zlib.compress(encoded)
+        rescue
+          error ->
+            Logger.error("Error compressing message: #{inspect(error)}")
+            encoded
+        end
+      _ -> encoded
+    end
   end
 
-  def websocket_info(_, state) do
-    ws_push(nil, state)
-  end
-
-  def exit(pid), do: send(pid, :exit)
-  defp exit_impl(state) do
-    ws_push([{:close, 4003, "killed by server"}, shutdown: :normal], state)
-  end
-
-  ###############################################################
-  ## Helper Functions
-
-  defp get_callers(request) do
-    request_bin = :cowboy_req.header("user-agent", request)
-
-    List.wrap(
-      if is_binary(request_bin) do
-        request_bin
-        |> Base.decode16!()
-        |> :erlang.binary_to_term()
-      end
-    )
-  end
-
-  defp encode_message(message, :zlib) do
-    :zlib.gzip(Jason.encode!(message))
-  end
-
-  defp encode_message(message, _compression) do
-    Jason.encode!(message)
+  defp handle_message(decoded, state) do
+    case WS.Message.handle(decoded, state) do
+      {:reply, response, new_state} ->
+        encoded_response = encode_response(response, state.compression)
+        frame_type = if state.compression == :zlib, do: :binary, else: :text
+        {:reply, {frame_type, encoded_response}, new_state}
+      {:ok, new_state} ->
+        {:ok, new_state}
+      {:error, reason} ->
+        Logger.error("Error handling message: #{inspect(reason)}")
+        {:reply, {:close, 4000, "Error processing message"}, state}
+    end
   end
 
 end

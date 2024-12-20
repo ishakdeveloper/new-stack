@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useEffect } from "react";
-import ChannelSidebar from "../components/ChannelSidebar";
-import ChatArea from "../components/ChatArea";
-import MembersList from "../components/MembersList";
+import ChannelSidebar from "../ChannelSidebar";
+import ChatArea from "../ChatArea";
+import MembersList from "../MembersList";
 import { client } from "@/utils/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { authClient } from "@/utils/authClient";

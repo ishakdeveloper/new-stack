@@ -17,6 +17,7 @@ import { Separator } from "@/components/ui/separator";
 import { Icons } from "@/components/ui/icons";
 import { authClient } from "@/utils/authClient";
 import { useUserStore } from "@/stores/useUserStore";
+import { Opcodes, useSocket } from "@/providers/SocketProvider";
 
 type FormData = {
   email: string;
@@ -33,6 +34,8 @@ export default function LoginScreen() {
     formState: { errors, isSubmitting },
   } = useForm<FormData>();
 
+  const { sendMessage } = useSocket();
+
   const onSubmit = async (data: FormData) => {
     await authClient.signIn
       .email({
@@ -41,11 +44,10 @@ export default function LoginScreen() {
         callbackURL: "/channels/me",
       })
       .then((user) => {
-        setCurrentUser({
-          id: user.data?.user.id ?? "",
-          email: user.data?.user.email ?? "",
-          name: user.data?.user.name ?? "",
-          image: user.data?.user.image ?? "",
+        // Send auth:login message to the server
+        sendMessage({
+          op: Opcodes.Identify,
+          d: user.data?.user,
         });
       });
   };

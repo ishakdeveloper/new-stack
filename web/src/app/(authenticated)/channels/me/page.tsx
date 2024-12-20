@@ -1,7 +1,7 @@
 import React from "react";
-import FriendsList from "./components/FriendsList";
-import ActivitySidebar from "./components/ActivitySidebar";
-import ConversationSidebar from "./components/ConversationSidebar";
+import FriendsList from "./FriendsList";
+import ActivitySidebar from "./ActivitySidebar";
+import ConversationSidebar from "./ConversationSidebar";
 
 export default function MePage() {
   return (
