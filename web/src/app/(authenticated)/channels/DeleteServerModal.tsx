@@ -1,5 +1,5 @@
 "use client";
-import { Button } from "@/components/ui/button";
+import { Button } from "@web/components/ui/button";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -10,14 +10,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { Icons } from "@/components/ui/icons";
-import { client } from "@/utils/client";
+} from "@web/components/ui/alert-dialog";
+import { Icons } from "@web/components/ui/icons";
+import { client } from "@web/utils/client";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { useUserStore } from "@/stores/useUserStore";
+import { useUserStore } from "@web/stores/useUserStore";
 import { useState } from "react";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@web/hooks/use-toast";
 
 interface DeleteServerModalProps {
   guildId: string;

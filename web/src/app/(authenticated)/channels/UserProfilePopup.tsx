@@ -5,14 +5,14 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "@/components/ui/popover";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
+} from "@web/components/ui/popover";
+import { Avatar, AvatarFallback } from "@web/components/ui/avatar";
+import { Button } from "@web/components/ui/button";
 import { MessageSquare } from "lucide-react";
-import { Separator } from "@/components/ui/separator";
+import { Separator } from "@web/components/ui/separator";
 import { useQuery } from "@tanstack/react-query";
-import { client } from "@/utils/client";
-import { Icons } from "@/components/ui/icons";
+import { client } from "@web/utils/client";
+import { Icons } from "@web/components/ui/icons";
 
 interface UserProfilePopupProps {
   open: boolean;

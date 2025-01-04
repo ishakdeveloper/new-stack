@@ -21,7 +21,7 @@ defmodule WS.Messages.Friend.FriendDecline do
 
   def execute(changeset, state) do
     with {:ok, request} <- apply_action(changeset, :delete) do
-      WS.PubSub.Broadcaster.broadcast_friend_request_declined(
+      WS.PubSub.Broadcaster.broadcast_friend_decline(
         request.from_user_id,
         request.to_user_id,
         request

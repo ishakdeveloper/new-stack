@@ -111,17 +111,42 @@ export const roles = pgTable("roles", {
   id: uuid("id").defaultRandom().primaryKey(),
   guildId: uuid("guildId")
     .notNull()
-    .references(() => guilds.id, { onDelete: "cascade" }), // Role belongs to a guild
-  name: text("name").notNull(), // Role name
-  color: integer("color"), // Optional role color
-  isDefault: boolean("isDefault").notNull().default(false), // True for default "Member" role
+    .references(() => guilds.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  color: integer("color"),
+  permissions: text("permissions").notNull().default("0"), // BigInt stored as string
+  position: integer("position").notNull().default(0),
+  isDefault: boolean("isDefault").notNull().default(false),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
 });
 
 export const RoleSchema = createSelectSchema(roles);
 export type Role = Static<typeof RoleSchema>;
 export const RoleCreateSchema = t.Omit(RoleSchema, ["id", "createdAt"]);
 export type RoleCreate = Static<typeof RoleCreateSchema>;
+
+export const roleAssignments = pgTable("role_assignments", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  roleId: uuid("roleId")
+    .notNull()
+    .references(() => roles.id, { onDelete: "cascade" }),
+  memberId: uuid("memberId")
+    .notNull()
+    .references(() => guildMembers.id, { onDelete: "cascade" }),
+  assignedAt: timestamp("assignedAt").notNull().defaultNow(),
+  assignedById: uuid("assignedById")
+    .notNull()
+    .references(() => user.id),
+});
+
+export const RoleAssignmentSchema = createSelectSchema(roleAssignments);
+export type RoleAssignment = Static<typeof RoleAssignmentSchema>;
+export const RoleAssignmentCreateSchema = t.Omit(RoleAssignmentSchema, [
+  "id",
+  "assignedAt",
+]);
+export type RoleAssignmentCreate = Static<typeof RoleAssignmentCreateSchema>;
 
 // Friendships Table
 export const friendships = pgTable("friendships", {
@@ -231,6 +256,7 @@ export const guildInviteLinks = pgTable("guild_invite_links", {
   status: varchar("status", { length: 20 }).notNull().default("active"), // e.g., active, expired
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   expiresAt: timestamp("expiresAt"), // Optional: expiration time for the link
+  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
 });
 
 export const GuildInviteLinkSchema = createSelectSchema(guildInviteLinks);

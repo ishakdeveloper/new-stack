@@ -21,6 +21,27 @@ export const auth = betterAuth({
       return uuidv4();
     },
   },
+  user: {
+    additionalFields: {
+      nickname: { type: "string", optional: true },
+      bio: { type: "string", optional: true },
+      banner: { type: "string", optional: true },
+      discriminator: { type: "string" },
+      accentColor: { type: "string", optional: true },
+      pronouns: { type: "string", optional: true },
+      status: { type: "string" },
+      customStatus: { type: "string", optional: true },
+      currentActivity: { type: "string", optional: true },
+      isPremium: { type: "boolean" },
+      badges: { type: "string[]", optional: true },
+      flags: { type: "number" },
+      theme: { type: "string" },
+      enableDM: { type: "boolean" },
+      locale: { type: "string" },
+      lastOnline: { type: "date", optional: true },
+      premiumSince: { type: "date", optional: true },
+    },
+  },
   emailAndPassword: {
     enabled: true,
     autoSignIn: true,
@@ -47,7 +68,21 @@ export type User = typeof auth.$Infer.Session.user & {
   bio?: string;
   banner?: string;
   discriminator: string;
+  accentColor?: string;
+  pronouns?: string;
+  status: string;
+  customStatus?: string;
+  currentActivity?: string;
+  isPremium: boolean;
+  badges?: string[];
+  flags: number;
+  theme: string;
+  enableDM: boolean;
+  locale: string;
+  lastOnline?: Date;
+  premiumSince?: Date;
 };
+
 export type Session = typeof auth.$Infer.Session.session;
 
 // Initialize the service

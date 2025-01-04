@@ -12,7 +12,13 @@ defmodule WS.Message.SocketHandler do
               callers: [],
               session_id: nil,
               user_id: nil,
-              presence: %{status: "offline"}
+              presence: %{status: "offline"},
+              current_voice_channel: nil,
+              voice_state: %{
+                self_mute: false,
+                self_deaf: false,
+                speaking: false
+              }
 
     @type t :: %__MODULE__{
       user: map() | nil,
@@ -21,7 +27,13 @@ defmodule WS.Message.SocketHandler do
       callers: list(),
       session_id: String.t() | nil,
       user_id: String.t() | nil,
-      presence: map()
+      presence: map(),
+      current_voice_channel: String.t() | nil,
+      voice_state: %{
+        self_mute: boolean(),
+        self_deaf: boolean(),
+        speaking: boolean()
+      }
     }
   end
 
@@ -85,8 +97,10 @@ defmodule WS.Message.SocketHandler do
   end
 
   @impl :cowboy_websocket
-  def terminate(_reason, _req, state) do
-    # Session cleanup happens automatically via process monitoring
+  def terminate(reason, _req, state) do
+    if state.current_voice_channel do
+      WS.Workers.Voice.leave_voice(state.current_voice_channel, state.user_id)
+    end
     :ok
   end
 
@@ -109,6 +123,38 @@ defmodule WS.Message.SocketHandler do
             encoded
         end
       _ -> encoded
+    end
+
+    frame_type = if state.compression == :zlib, do: :binary, else: :text
+    {:reply, {frame_type, frame_data}, state}
+  end
+
+  @impl :cowboy_websocket
+  def websocket_info({:voice_state_update, data}, state) do
+    response = Jason.encode!(%{
+      "op" => "voice_state_update",
+      "d" => data
+    })
+
+    frame_data = case state.compression do
+      :zlib -> :zlib.compress(response)
+      _ -> response
+    end
+
+    frame_type = if state.compression == :zlib, do: :binary, else: :text
+    {:reply, {frame_type, frame_data}, state}
+  end
+
+  @impl :cowboy_websocket
+  def websocket_info({:voice_signal, data}, state) do
+    response = Jason.encode!(%{
+      "op" => "voice_signal",
+      "d" => data
+    })
+
+    frame_data = case state.compression do
+      :zlib -> :zlib.compress(response)
+      _ -> response
     end
 
     frame_type = if state.compression == :zlib, do: :binary, else: :text

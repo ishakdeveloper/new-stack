@@ -1,100 +1,105 @@
 "use client";
 
 import * as React from "react";
-import {
-  Bell,
-  Palette,
-  Settings,
-  X,
-  User,
-  Keyboard,
-  Lock,
-  Video,
-  MessageSquare,
-  Volume2,
-  Globe,
-  Shield,
-  Gift,
-  CreditCard,
-  Users,
-  Layout,
-  Smartphone,
-  Link,
-  Zap,
-  Package,
-  LogOut,
-} from "lucide-react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { Settings, X, User, Camera, LogOut } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@web/components/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogTrigger,
   DialogTitle,
   DialogClose,
-} from "@/components/ui/dialog";
-import { VisuallyHidden } from "@/components/ui/visually-hidden";
-
-import {
-  SidebarHeader,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarContent,
-  SidebarGroup,
-  SidebarMenu,
-  SidebarGroupContent,
-  SidebarProvider,
-} from "@/components/ui/sidebar";
-import { authClient } from "@/utils/authClient";
+} from "@web/components/ui/dialog";
+import { ScrollArea } from "@web/components/ui/scroll-area";
 import { useRouter } from "next/navigation";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@web/components/ui/form";
+import { Input } from "@web/components/ui/input";
+import { Textarea } from "@web/components/ui/textarea";
+import { Alert, AlertDescription } from "@web/components/ui/alert";
+import { useUserStore } from "@web/stores/useUserStore";
+import { authClient } from "@web/utils/authClient";
+import { useQuery } from "@tanstack/react-query";
+import { client } from "@web/utils/client";
+import { useEffect } from "react";
 
-const settingsSections = [
-  {
-    group: "USER SETTINGS",
-    items: [
-      { id: "account", label: "My Account", icon: User },
-      { id: "profiles", label: "Profiles", icon: User },
-      { id: "privacy", label: "Privacy & Safety", icon: Lock },
-      { id: "content", label: "Content & Social", icon: MessageSquare },
-      { id: "data", label: "Data & Privacy", icon: Shield },
-      { id: "family", label: "Family Center", icon: Users },
-      { id: "apps", label: "Authorized Apps", icon: Layout },
-      { id: "devices", label: "Devices", icon: Smartphone },
-      { id: "connections", label: "Connections", icon: Link },
-      { id: "clips", label: "Clips & Activities", icon: Video },
-    ],
-  },
-  {
-    group: "BILLING SETTINGS",
-    items: [
-      { id: "nitro", label: "Nitro", icon: Gift },
-      { id: "server-boost", label: "Server Boost", icon: Zap },
-      { id: "subscriptions", label: "Subscriptions", icon: CreditCard },
-      { id: "inventory", label: "Gift Inventory", icon: Package },
-      { id: "billing", label: "Billing", icon: CreditCard },
-    ],
-  },
-  {
-    group: "APP SETTINGS",
-    items: [
-      { id: "appearance", label: "Appearance", icon: Palette },
-      { id: "accessibility", label: "Accessibility", icon: Shield },
-      { id: "voice", label: "Voice & Video", icon: Video },
-      { id: "text", label: "Text & Messages", icon: MessageSquare },
-      { id: "notifications", label: "Notifications", icon: Bell },
-      { id: "keybinds", label: "Keybinds", icon: Keyboard },
-      { id: "language", label: "Language", icon: Globe },
-      { id: "streamer", label: "Streamer Mode", icon: Video },
-    ],
-  },
-  {
-    group: "LOGOUT",
-    items: [{ id: "logout", label: "Log Out", icon: LogOut }],
-  },
-];
+const userProfileSchema = z.object({
+  name: z.string().min(2).max(32),
+  nickname: z.string().min(2).max(32).optional(),
+  email: z.string().email(),
+  bio: z.string().max(190).optional(),
+  pronouns: z.string().max(32).optional(),
+  customStatus: z.string().max(128).optional(),
+  accentColor: z
+    .string()
+    .regex(/^#[0-9A-F]{6}$/i)
+    .optional(),
+});
+
+type UserProfileFormValues = z.infer<typeof userProfileSchema>;
 
 export function SettingsOverlay() {
-  const [activeSection, setActiveSection] = React.useState("account");
+  const router = useRouter();
+  const [hasUnsavedChanges, setHasUnsavedChanges] = React.useState(false);
+  const currentUserId = useUserStore((state) => state.currentUser?.id);
+
+  useEffect(() => {
+    console.log("currentUserId", currentUserId);
+  }, []);
+
+  const { data: user, isLoading: isLoadingUser } = useQuery({
+    queryKey: ["user", currentUserId],
+    queryFn: async () => {
+      const response = await client.api
+        .users({ id: currentUserId ?? "" })
+        .get();
+      return response.data?.[0] ?? null;
+    },
+  });
+
+  const form = useForm<UserProfileFormValues>({
+    resolver: zodResolver(userProfileSchema),
+    defaultValues: {
+      name: user?.name ?? "",
+      nickname: user?.nickname ?? "",
+      email: user?.email ?? "",
+      bio: user?.bio ?? "",
+      pronouns: user?.pronouns ?? "",
+      customStatus: user?.customStatus ?? "",
+      accentColor: user?.accentColor ?? "#000000",
+    },
+  });
+
+  React.useEffect(() => {
+    const subscription = form.watch(() => {
+      setHasUnsavedChanges(true);
+    });
+    return () => subscription.unsubscribe();
+  }, [form.watch]);
+
+  const onSubmit = async (data: UserProfileFormValues) => {
+    console.log(data);
+  };
+
+  const handleLogout = async () => {
+    await authClient.signOut({
+      fetchOptions: {
+        credentials: "include",
+      },
+    });
+
+    router.push("/login");
+  };
 
   return (
     <Dialog>
@@ -104,225 +109,199 @@ export function SettingsOverlay() {
           <span className="sr-only">Settings</span>
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-full h-full p-0 overflow-y-auto">
-        <VisuallyHidden>
-          <DialogTitle>User Settings</DialogTitle>
-        </VisuallyHidden>
-        <div className="flex h-full">
-          <SettingsSidebar
-            activeSection={activeSection}
-            setActiveSection={setActiveSection}
-          />
-          <div className="flex-1 relative">
-            <DialogClose className="absolute right-4 top-4 z-10" asChild>
+      <DialogContent className="max-w-2xl max-h-[90vh]">
+        {hasUnsavedChanges && (
+          <div className="fixed bottom-0 left-0 right-0 p-4 border-t bg-background z-50">
+            <Alert className="bg-primary">
+              <AlertDescription className="flex items-center justify-between">
+                <span>
+                  You have unsaved changes. Make sure to save before closing.
+                </span>
+                <Button onClick={form.handleSubmit(onSubmit)} type="submit">
+                  Save Changes
+                </Button>
+              </AlertDescription>
+            </Alert>
+          </div>
+        )}
+
+        <div className="flex justify-between items-center mb-6">
+          <DialogTitle className="text-2xl font-bold">
+            User Settings
+          </DialogTitle>
+          <div className="flex gap-2">
+            <Button variant="destructive" onClick={handleLogout}>
+              <LogOut className="h-4 w-4 mr-2" />
+              Log Out
+            </Button>
+            <DialogClose asChild>
               <Button variant="ghost" size="icon">
                 <X className="h-4 w-4" />
                 <span className="sr-only">Close</span>
               </Button>
             </DialogClose>
-            <SettingsContent activeSection={activeSection} />
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
-interface SettingsSidebarProps {
-  activeSection: string;
-  setActiveSection: (section: string) => void;
-}
-
-export function SettingsSidebar({
-  activeSection,
-  setActiveSection,
-}: SettingsSidebarProps) {
-  return (
-    <aside className="h-full border-r bg-secondary/50">
-      <div className="p-3">
-        <div className="relative">
-          <input
-            type="text"
-            placeholder="Search"
-            className="w-full px-3 py-1.5 text-sm rounded-sm bg-background border-0 placeholder:text-muted-foreground"
-          />
-        </div>
-      </div>
-      <div className="overflow-y-auto h-[calc(100vh-64px)]">
-        {settingsSections.map((section) => (
-          <div key={section.group} className="mb-2">
-            <div className="px-3 py-1.5 text-xs font-semibold text-muted-foreground">
-              {section.group}
-            </div>
-            <div>
-              {section.items.map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => setActiveSection(item.id)}
-                  className={`flex items-center gap-3 px-3 py-1.5 w-full hover:bg-accent/50 transition-colors ${
-                    activeSection === item.id
-                      ? "bg-accent text-accent-foreground"
-                      : ""
-                  }`}
+        <ScrollArea className="h-[calc(90vh-8rem)] pr-4">
+          <div className="space-y-8">
+            {/* Banner and Profile Picture */}
+            <div className="relative mb-24">
+              <div className="h-32 bg-accent rounded-lg relative">
+                <div className="absolute inset-0 bg-cover bg-center rounded-lg" />
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="absolute bottom-2 right-2"
                 >
-                  <item.icon className="h-4 w-4" />
-                  <span className="text-sm">{item.label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-    </aside>
-  );
-}
-
-interface SettingsContentProps {
-  activeSection: string;
-}
-
-export function SettingsContent({ activeSection }: SettingsContentProps) {
-  const currentSection = settingsSections
-    .flatMap((section) => section.items)
-    .find((item) => item.id === activeSection);
-
-  const router = useRouter();
-
-  const handleLogOut = async () => {
-    await authClient.signOut({
-      fetchOptions: {
-        credentials: "include",
-        redirect: "follow",
-      },
-    });
-
-    router.push("/login");
-  };
-
-  return (
-    <div className="h-full overflow-y-auto">
-      <div className="p-10 max-w-2xl mx-auto">
-        <h2 className="text-2xl font-semibold mb-6">{currentSection?.label}</h2>
-        <div className="space-y-6">
-          {activeSection === "account" && (
-            <>
-              <div className="rounded-lg border p-4">
-                <div className="flex items-center gap-4 mb-6">
-                  <div className="relative">
-                    <div className="h-20 w-20 rounded-full bg-accent flex items-center justify-center">
-                      <User className="h-10 w-10" />
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      className="absolute -bottom-2 -right-2"
-                    >
-                      Edit
-                    </Button>
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-semibold">Username#1234</h3>
-                    <p className="text-sm text-muted-foreground">Online</p>
-                  </div>
-                </div>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium">Display Name</p>
-                      <p className="text-sm text-muted-foreground">
-                        This is how others see you
-                      </p>
-                    </div>
-                    <Button variant="outline">Edit</Button>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium">Email</p>
-                      <p className="text-sm text-muted-foreground">
-                        user@example.com
-                      </p>
-                    </div>
-                    <Button variant="outline">Change</Button>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium">Phone Number</p>
-                      <p className="text-sm text-muted-foreground">
-                        Add a phone number for additional security
-                      </p>
-                    </div>
-                    <Button variant="outline">Add</Button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-lg border p-4">
-                <h3 className="text-lg font-medium mb-2">Account Security</h3>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium">Password</p>
-                      <p className="text-sm text-muted-foreground">
-                        Change your password
-                      </p>
-                    </div>
-                    <Button variant="outline">Change</Button>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium">Two-Factor Authentication</p>
-                      <p className="text-sm text-muted-foreground">
-                        Add an extra layer of security
-                      </p>
-                    </div>
-                    <Button variant="outline">Enable</Button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-lg border p-4">
-                <h3 className="text-lg font-medium mb-2">Account Removal</h3>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium">Disable Account</p>
-                      <p className="text-sm text-muted-foreground">
-                        Temporarily disable your account
-                      </p>
-                    </div>
-                    <Button variant="outline">Disable</Button>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium">Delete Account</p>
-                      <p className="text-sm text-muted-foreground">
-                        Permanently delete your account
-                      </p>
-                    </div>
-                    <Button variant="destructive">Delete</Button>
-                  </div>
-                </div>
-              </div>
-            </>
-          )}
-
-          <div className="rounded-lg border p-4">
-            <h3 className="text-lg font-medium mb-4">Log Out</h3>
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                Are you sure you want to log out? You'll need to sign in again
-                to access your account.
-              </p>
-              <div className="flex justify-end gap-4">
-                <Button variant="outline">Cancel</Button>
-                <Button variant="destructive" onClick={handleLogOut}>
-                  Log Out
+                  <Camera className="h-4 w-4 mr-2" />
+                  Change Banner
                 </Button>
               </div>
+
+              <div className="absolute -bottom-12 left-4">
+                <div className="relative">
+                  <div className="h-24 w-24 rounded-full bg-background border-4 border-background overflow-hidden">
+                    <div className="h-full w-full bg-accent flex items-center justify-center">
+                      <User className="h-12 w-12" />
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="absolute -bottom-2 -right-2"
+                  >
+                    <Camera className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
             </div>
+
+            {/* Profile Form */}
+            <Form {...form}>
+              <form
+                onSubmit={form.handleSubmit(onSubmit)}
+                className="space-y-6"
+              >
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Display Name</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="nickname"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Nickname</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Email</FormLabel>
+                      <FormControl>
+                        <Input {...field} type="email" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="bio"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>About Me</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          {...field}
+                          placeholder="Tell us about yourself"
+                          className="resize-none"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="pronouns"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Pronouns</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="they/them" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="customStatus"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Custom Status</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="What's on your mind?" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="accentColor"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Accent Color</FormLabel>
+                      <FormControl>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            {...field}
+                            type="color"
+                            className="w-12 h-12 p-1"
+                          />
+                          <Input {...field} className="flex-1" />
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="flex justify-start items-center pt-6">
+                  <Button type="submit" disabled={!hasUnsavedChanges}>
+                    Save Changes
+                  </Button>
+                </div>
+              </form>
+            </Form>
           </div>
-        </div>
-      </div>
-    </div>
+        </ScrollArea>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -1,8 +1,8 @@
 "use client";
 
-import { useSocket } from "@/providers/SocketProvider";
+import { useSocket } from "@web/providers/SocketProvider";
 import { useEffect, useState } from "react";
-import { cn } from "@/lib/utils";
+import { cn } from "@web/lib/utils";
 
 export const StatusBar = () => {
   const { isConnected } = useSocket();

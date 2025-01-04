@@ -1,6 +1,5 @@
 import React from "react";
 import PrivateChatbox from "./PrivateChatbox";
-import UserProfile from "./UserProfile";
 
 export default async function PrivateChatPage({
   params,

@@ -2,7 +2,7 @@
 
 import { useForm } from "react-hook-form";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
+import { Button } from "@web/components/ui/button";
 import {
   Card,
   CardContent,
@@ -10,13 +10,13 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Icons } from "@/components/ui/icons";
-import { authClient } from "@/utils/authClient";
-import { useUserStore } from "@/stores/useUserStore";
-import { useSocket } from "@/providers/SocketProvider";
+} from "@web/components/ui/card";
+import { Input } from "@web/components/ui/input";
+import { Label } from "@web/components/ui/label";
+import { Icons } from "@web/components/ui/icons";
+import { authClient } from "@web/utils/authClient";
+import { useUserStore } from "@web/stores/useUserStore";
+import { useSocket } from "@web/providers/SocketProvider";
 type FormData = {
   name: string;
   email: string;

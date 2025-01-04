@@ -1,7 +1,7 @@
 import { Elysia, t } from "elysia";
 import { eq, and } from "drizzle-orm";
-import { guildMembers } from "../database/schema/index";
-import db from "../database/db";
+import { guildMembers } from "@server/database/schema";
+import db from "@server/database/db";
 import { userMiddleware } from "./userMiddleware";
 
 export const isGuildMember = new Elysia()

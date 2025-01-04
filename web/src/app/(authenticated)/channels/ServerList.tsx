@@ -1,31 +1,31 @@
 "use client";
-import { AvatarFallback } from "@/components/ui/avatar";
-import { Avatar } from "@/components/ui/avatar";
-import { Tooltip } from "@/components/ui/tooltip";
-import { Button } from "@/components/ui/button";
+import { AvatarFallback } from "@web/components/ui/avatar";
+import { Avatar } from "@web/components/ui/avatar";
+import { Tooltip } from "@web/components/ui/tooltip";
+import { Button } from "@web/components/ui/button";
 import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
+} from "@web/components/ui/tooltip";
 import { Home, Plus, Bell, BellOff, LogOut } from "lucide-react";
 import React, { useEffect } from "react";
 import Link from "next/link";
-import { Separator } from "@/components/ui/separator";
+import { Separator } from "@web/components/ui/separator";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { client } from "@/utils/client";
-import { useGuildStore } from "@/stores/useGuildStore";
+import { client } from "@web/utils/client";
+import { useGuildStore } from "@web/stores/useGuildStore";
 import { useRouter } from "next/navigation";
 import { CreateGuildModal } from "./CreateGuildModal";
-import { useUserStore } from "@/stores/useUserStore";
+import { useUserStore } from "@web/stores/useUserStore";
 import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuTrigger,
-} from "@/components/ui/context-menu";
-import { Opcodes, useSocket } from "@/providers/SocketProvider";
-import { useChatStore } from "@/stores/useChatStore";
+} from "@web/components/ui/context-menu";
+import { Opcodes, useSocket } from "@web/providers/SocketProvider";
+import { useChatStore } from "@web/stores/useChatStore";
 
 export default function ServerList() {
   const currentUser = useUserStore((state) => state.currentUser);
@@ -72,8 +72,10 @@ export default function ServerList() {
       });
 
       socket.sendMessage({
-        op: "user_left_guild",
-        guild_id: guildId,
+        op: Opcodes.UserLeftGuild,
+        d: {
+          guild_id: guildId,
+        },
       });
 
       // Redirect to "Home" after leaving
@@ -183,7 +185,7 @@ export default function ServerList() {
                       onClick={() =>
                         handleGuildClick(
                           guild.guilds.id,
-                          guild.guilds.defaultChannelId
+                          guild.guilds.defaultChannelId ?? ""
                         )
                       }
                       variant="ghost"

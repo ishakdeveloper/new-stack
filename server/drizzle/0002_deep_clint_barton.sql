@@ -1,0 +1,1 @@
+ALTER TABLE "guild_invite_links" ADD COLUMN "updatedAt" timestamp DEFAULT now() NOT NULL;

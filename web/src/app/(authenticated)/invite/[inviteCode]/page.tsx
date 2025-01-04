@@ -2,11 +2,11 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { client } from "@/utils/client";
-import { useToast } from "@/hooks/use-toast";
-import { useGuildStore } from "@/stores/useGuildStore";
-import { useSocket } from "@/providers/SocketProvider";
+import { Button } from "@web/components/ui/button";
+import { client } from "@web/utils/client";
+import { useToast } from "@web/hooks/use-toast";
+import { useGuildStore } from "@web/stores/useGuildStore";
+import { Opcodes, useSocket } from "@web/providers/SocketProvider";
 
 export default function InvitePage({
   params,
@@ -46,8 +46,10 @@ export default function InvitePage({
       });
       if (guild) {
         sendMessage({
-          op: "user_joined_guild",
-          guild_id: guild?.guilds.id,
+          op: Opcodes.GuildMemberAdd,
+          d: {
+            guild_id: guild?.guilds.id,
+          },
         });
 
         setCurrentGuildId(guild?.guilds.id);
@@ -88,7 +90,7 @@ export default function InvitePage({
           <h2 className="text-2xl font-bold">
             You&apos;ve been invited to join
           </h2>
-          <h1 className="text-3xl font-bold mt-2">{guild.guilds.name}</h1>
+          <h1 className="text-3xl font-bold mt-2">{guild?.guilds.name}</h1>
         </div>
 
         <Button

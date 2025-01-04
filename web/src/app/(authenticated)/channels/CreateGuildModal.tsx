@@ -1,5 +1,5 @@
 "use client";
-import { Button } from "@/components/ui/button";
+import { Button } from "@web/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -8,27 +8,27 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+} from "@web/components/ui/dialog";
+import { Input } from "@web/components/ui/input";
+import { Label } from "@web/components/ui/label";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { client } from "@/utils/client";
+} from "@web/components/ui/tooltip";
+import { client } from "@web/utils/client";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
-import { useUserStore } from "@/stores/useUserStore";
+import { useUserStore } from "@web/stores/useUserStore";
 import { useState } from "react";
-import { Icons } from "@/components/ui/icons";
-import { useGuildStore } from "@/stores/useGuildStore";
-import { useToast } from "@/hooks/use-toast";
-import { useSocket } from "@/providers/SocketProvider";
+import { Icons } from "@web/components/ui/icons";
+import { useGuildStore } from "@web/stores/useGuildStore";
+import { useToast } from "@web/hooks/use-toast";
+import { useSocket } from "@web/providers/SocketProvider";
 
 const createGuildSchema = z.object({
   name: z.string().min(1, "Name is required").max(100),
@@ -67,18 +67,21 @@ export function CreateGuildModal() {
       return response.data;
     },
     onSuccess: (data) => {
+      console.log("data", data);
       queryClient.invalidateQueries({ queryKey: ["guilds", currentUser?.id] });
       reset();
       setOpen(false);
-      setCurrentGuildId(data?.guild.id ?? "");
+      setCurrentGuildId(data?.[0][200].guild.id ?? "");
       setLastVisitedChannel(
-        data?.guild.id ?? "",
-        data?.defaultChannel.id ?? ""
+        data?.[0][200].guild.id ?? "",
+        data?.[0][200].defaultChannel.id ?? ""
       );
-      router.push(`/channels/${data?.guild.id}/${data?.defaultChannel.id}`);
+      router.push(
+        `/channels/${data?.[0][200].guild.id}/${data?.[0][200].defaultChannel.id}`
+      );
       toast({
         title: "Server Created",
-        description: `Successfully created server "${data?.guild.name}"`,
+        description: `Successfully created server "${data?.[0][200].guild.name}"`,
       });
 
       // socket.sendMessage({

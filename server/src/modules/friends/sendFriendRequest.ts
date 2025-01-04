@@ -1,9 +1,9 @@
-import { userMiddleware } from "@/middlewares/userMiddleware";
+import { userMiddleware } from "@server/middlewares/userMiddleware";
 import { eq, sql } from "drizzle-orm";
 import Elysia, { t } from "elysia";
-import { user as UserTable } from "@/database/schema/auth";
-import db from "@/database/db";
-import { friendships } from "@/database/schema";
+import { user as UserTable } from "@server/database/schema/auth";
+import db from "@server/database/db";
+import { friendships } from "@server/database/schema";
 
 // Send friend request
 export const sendFriendRequest = new Elysia()
@@ -67,6 +67,13 @@ export const sendFriendRequest = new Elysia()
     {
       body: t.Object({
         addresseeName: t.String(),
+      }),
+      response: t.Object({
+        id: t.String(),
+        requesterId: t.String(),
+        addresseeId: t.String(),
+        status: t.String(),
+        createdAt: t.Date(),
       }),
     }
   );

@@ -1,6 +1,5 @@
 import { Context, Elysia } from "elysia";
-import { auth, Session, User } from "../lib/auth";
-import { betterAuthView } from "..";
+import { auth } from "@server/lib/auth";
 
 // user middleware (compute user and session and pass to routes)
 export const userMiddleware = async (context: Context) => {

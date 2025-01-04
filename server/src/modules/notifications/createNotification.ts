@@ -1,5 +1,5 @@
-import db from "@/database/db";
-import { notifications } from "@/database/schema";
+import db from "@server/database/db";
+import { notifications } from "@server/database/schema";
 import { NotificationType } from "./notificationTypes";
 // Type for notification data
 type NotificationData = {

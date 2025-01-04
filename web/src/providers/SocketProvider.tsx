@@ -1,6 +1,6 @@
 "use client";
 
-import { authClient, Session } from "@/utils/authClient";
+import { authClient, Session } from "@web/utils/authClient";
 import React, {
   createContext,
   useContext,
@@ -22,51 +22,152 @@ type ExtendedUser = User & {
 
 // Discord-like Gateway Opcodes
 export enum Opcodes {
-  // Connection & State
+  // Connection & Authentication (0-9)
   Dispatch = 0,
   Heartbeat = 1,
   Identify = 2,
   Presence = 3,
   Ready = 4,
-
-  // Session
   Resume = 6,
   Reconnect = 7,
   RequestGuildMembers = 8,
   InvalidSession = 9,
+
+  // Connection Lifecycle (10-14)
   Hello = 10,
   HeartbeatAck = 11,
 
-  // Custom Events (15+)
+  // Guild Events (15-29)
   GuildCreate = 15,
   GuildUpdate = 16,
   GuildDelete = 17,
-  ChannelCreate = 18,
-  ChannelUpdate = 19,
-  ChannelDelete = 20,
-  MessageCreate = 21,
-  MessageUpdate = 22,
-  MessageDelete = 23,
+  GuildMemberAdd = 24,
+  GuildMemberUpdate = 25,
+  GuildMemberRemove = 26,
+  GuildRoleCreate = 27,
+  GuildRoleUpdate = 28,
+  GuildRoleDelete = 29,
 
-  FriendRequest = 30,
-  FriendAccept = 31,
-  FriendDecline = 32,
-  FriendRemove = 33,
-  ChannelJoin = 40,
-  ChannelLeave = 41,
-  StartTyping = 50,
+  // Channel Events (30-39)
+  ChannelCreate = 30,
+  ChannelUpdate = 31,
+  ChannelDelete = 32,
+  ChannelPinsUpdate = 33,
+  ChannelJoin = 34,
+  ChannelLeave = 35,
+  ChannelTyping = 36,
+
+  // Message Events (40-49)
+  MessageCreate = 40,
+  MessageUpdate = 41,
+  MessageDelete = 42,
+  MessageDeleteBulk = 43,
+  MessageReactionAdd = 44,
+  MessageReactionRemove = 45,
+  MessageReactionRemoveAll = 46,
+
+  // Friend/Relationship Events (50-59)
+  FriendRequest = 50,
+  FriendAccept = 51,
+  FriendDecline = 52,
+  FriendRemove = 53,
+  RelationshipAdd = 54,
+  RelationshipRemove = 55,
+
+  // Voice Events (60-69)
+  VoiceStateUpdate = 60,
+  VoiceServerUpdate = 61,
+  VoiceConnect = 62,
+  VoiceDisconnect = 63,
+  VoiceMute = 64,
+  VoiceDeafen = 65,
+  VoiceSignal = 66,
+
+  // User Events (70-79)
+  UserUpdate = 70,
+  UserNoteUpdate = 71,
+  UserSettingsUpdate = 72,
+  UserConnectionsUpdate = 73,
+
+  // Presence Events (80-89)
+  PresenceUpdate = 80,
+  SessionsReplace = 81,
+  TypingStart = 82,
+  TypingStop = 83,
+
+  // Thread Events (90-99)
+  ThreadCreate = 90,
+  ThreadUpdate = 91,
+  ThreadDelete = 92,
+  ThreadMemberUpdate = 93,
+  ThreadMembersUpdate = 94,
+
   PubSubEvent = "pubsub_event",
 }
 
 export type PubSubEvents =
+  // Guild Events
+  | "guild_member_added"
+  | "guild_member_removed"
+  | "guild_member_updated"
+  | "guild_role_created"
+  | "guild_role_updated"
+  | "guild_role_deleted"
+  | "user_left_guild"
+  | "user_joined_guild"
+
+  // Channel Events
+  | "user_created_channel"
+  | "user_updated_channel"
+  | "user_deleted_channel"
+  | "channel_pins_updated"
+  | "channel_joined"
+  | "channel_left"
+
+  // Message Events
+  | "message_create"
+  | "message_update"
+  | "message_delete"
+  | "message_delete_bulk"
+  | "message_reaction_add"
+  | "message_reaction_remove"
+  | "message_reaction_remove_all"
+
+  // Friend/Relationship Events
   | "friend_request_received"
   | "friend_request_accepted"
   | "friend_request_declined"
   | "friend_removed"
-  | "friend_accept"
-  | "channel_join"
-  | "channel_leave"
-  | "message_create";
+  | "relationship_added"
+  | "relationship_removed"
+
+  // Voice Events
+  | "voice_state_updated"
+  | "voice_server_updated"
+  | "voice_connected"
+  | "voice_disconnected"
+  | "voice_muted"
+  | "voice_deafened"
+  | "voice_signal"
+
+  // User Events
+  | "user_updated"
+  | "user_note_updated"
+  | "user_settings_updated"
+  | "user_connections_updated"
+
+  // Presence Events
+  | "presence_updated"
+  | "sessions_replaced"
+  | "typing_started"
+  | "typing_stopped"
+
+  // Thread Events
+  | "thread_created"
+  | "thread_updated"
+  | "thread_deleted"
+  | "thread_member_updated"
+  | "thread_members_updated";
 
 type WSMessage = {
   op: Opcodes;

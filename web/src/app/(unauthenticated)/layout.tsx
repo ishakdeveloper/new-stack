@@ -1,5 +1,5 @@
-import { authClient } from "@/utils/authClient";
-import { client } from "@/utils/client";
+import { authClient } from "@web/utils/authClient";
+import { client } from "@web/utils/client";
 import { auth } from "@repo/server/src/lib/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
