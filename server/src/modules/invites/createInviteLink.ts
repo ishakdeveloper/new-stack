@@ -1,7 +1,7 @@
-import db from "@/database/db";
-import { guildInviteLinks, guildMembers } from "@/database/schema";
-import { generateInviteCode } from "@/lib/generateInviteCode";
-import { userMiddleware } from "@/middlewares/userMiddleware";
+import db from "@server/database/db";
+import { guildInviteLinks, guildMembers } from "@server/database/schema";
+import { generateInviteCode } from "@server/lib/generateInviteCode";
+import { userMiddleware } from "@server/middlewares/userMiddleware";
 import { and, eq } from "drizzle-orm";
 import Elysia, { t } from "elysia";
 
@@ -46,14 +46,27 @@ export const createInviteLink = new Elysia()
           .then((results) => results[0]);
 
         if (existingInvite) {
-          return existingInvite;
+          return {
+            200: {
+              id: existingInvite.id,
+              inviteCode: existingInvite.inviteCode,
+              guildId: existingInvite.guildId,
+              inviterId: existingInvite.inviterId,
+              maxUses: existingInvite.maxUses,
+              uses: existingInvite.uses,
+              expiresAt: existingInvite.expiresAt,
+              status: existingInvite.status,
+              createdAt: existingInvite.createdAt,
+              updatedAt: existingInvite.createdAt,
+            },
+          };
         }
 
         const inviteCode = generateInviteCode();
         const expiresAt = new Date();
         expiresAt.setDate(expiresAt.getDate() + 7); // Set expiration to 7 days from now
 
-        const invite = await tx
+        const [invite] = await tx
           .insert(guildInviteLinks)
           .values({
             inviteCode,
@@ -64,13 +77,40 @@ export const createInviteLink = new Elysia()
           })
           .returning();
 
-        return invite[0];
+        return {
+          200: {
+            id: invite.id,
+            inviteCode: invite.inviteCode,
+            guildId: invite.guildId,
+            inviterId: invite.inviterId,
+            maxUses: invite.maxUses,
+            uses: invite.uses,
+            expiresAt: invite.expiresAt,
+            status: invite.status,
+            createdAt: invite.createdAt,
+            updatedAt: invite.createdAt,
+          },
+        };
       });
     },
     {
       body: t.Object({
         guildId: t.String(),
         maxUses: t.Number(),
+      }),
+      response: t.Object({
+        200: t.Object({
+          id: t.String(),
+          inviteCode: t.String(),
+          guildId: t.String(),
+          inviterId: t.String(),
+          maxUses: t.Union([t.Number(), t.Null()]),
+          uses: t.Union([t.Number(), t.Null()]),
+          expiresAt: t.Union([t.Date(), t.Null()]),
+          status: t.String(),
+          createdAt: t.Date(),
+          updatedAt: t.Date(),
+        }),
       }),
     }
   );

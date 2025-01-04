@@ -1,6 +1,7 @@
 defmodule WS.Workers.Channel do
   use GenServer
   require Logger
+  alias WS.PubSub.{Topics, Broadcaster}
 
   defmodule State do
     defstruct [:channel_id, :user_ids]
@@ -22,12 +23,6 @@ defmodule WS.Workers.Channel do
     end
   end
 
-  defp ws_fan(user_ids, msg) do
-    Enum.each(user_ids, fn user_id ->
-      WS.Workers.UserSession.send_ws(user_id, msg)
-    end)
-  end
-
   def start_channel(channel_id, user_ids) do
     case Registry.lookup(WS.Workers.ChannelRegistry, channel_id) do
       [] ->
@@ -36,11 +31,10 @@ defmodule WS.Workers.Channel do
           {__MODULE__, %{channel_id: channel_id, user_ids: user_ids}}
         ) do
           {:ok, pid} ->
-            # Notify all users they were added to channel
-            ws_fan(user_ids, %{
-              "op" => "channel_created",
-              "channel_id" => channel_id,
-              "user_ids" => user_ids
+            # Notify through PubSub that channel was created
+            Broadcaster.broadcast_channel_create(channel_id, %{
+              channel_id: channel_id,
+              user_ids: user_ids
             })
             {:ok, pid}
 
@@ -73,6 +67,67 @@ defmodule WS.Workers.Channel do
     {:ok, struct(State, state)}
   end
 
+  ########################################################################
+  ## API
+  ########################################################################
+
+  def add_user(channel_id, user_id), do: cast(channel_id, {:add_user, user_id})
+
+  defp add_user_impl(user_id, state) do
+    new_user_ids = [user_id | Enum.filter(state.user_ids, fn uid -> uid != user_id end)]
+    new_state = %{state | user_ids: new_user_ids}
+
+    Broadcaster.broadcast_channel_update(state.channel_id, %{
+      channel_id: state.channel_id,
+      user_id: user_id,
+      type: "user_added"
+    })
+
+    {:noreply, new_state}
+  end
+
+  def remove_user(channel_id, user_id), do: cast(channel_id, {:remove_user, user_id})
+
+  defp remove_user_impl(user_id, state) do
+    user_ids = Enum.reject(state.user_ids, &(&1 == user_id))
+    new_state = %{state | user_ids: user_ids}
+
+    Broadcaster.broadcast_channel_update(state.channel_id, %{
+      channel_id: state.channel_id,
+      user_id: user_id,
+      type: "user_removed"
+    })
+
+    case user_ids do
+      [] ->
+        {:stop, :normal, new_state}
+      _ ->
+        {:noreply, new_state}
+    end
+  end
+
+  def start_typing(channel_id, user_id) do
+    cast(channel_id, {:typing_start, user_id})
+  end
+
+  def stop_typing(channel_id, user_id) do
+    cast(channel_id, {:typing_stop, user_id})
+  end
+
+  def handle_cast({:typing_start, user_id}, state) do
+    Broadcaster.broadcast_typing(state.channel_id, user_id)
+    {:noreply, state}
+  end
+
+  def handle_cast({:typing_stop, user_id}, state) do
+    Broadcaster.broadcast_typing_stop(state.channel_id, user_id)
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_cast({:add_user, user_id}, state), do: add_user_impl(user_id, state)
+  def handle_cast({:remove_user, user_id}, state), do: remove_user_impl(user_id, state)
+
   defp log_state_change(action, state) when is_map(state) do
     channel_id = Map.get(state, :channel_id)
     user_ids = Map.get(state, :user_ids)
@@ -85,57 +140,6 @@ defmodule WS.Workers.Channel do
     ============================
     """)
   end
-
-  ########################################################################
-  ## API
-  ########################################################################
-
-  def broadcast_ws(channel_id, msg), do: cast(channel_id, {:broadcast_ws, msg})
-
-  defp broadcast_ws_impl(msg, state) do
-    ws_fan(state.user_ids, msg)
-    {:noreply, state}
-  end
-
-  def add_user(channel_id, user_id), do: cast(channel_id, {:add_user, user_id})
-
-  defp add_user_impl(user_id, state) do
-    new_user_ids = [user_id | Enum.filter(state.user_ids, fn uid -> uid != user_id end)]
-    new_state = %{state | user_ids: new_user_ids}
-
-    ws_fan(new_user_ids, %{
-      "op" => "channel_user_added",
-      "channel_id" => state.channel_id,
-      "user_id" => user_id
-    })
-
-    {:noreply, new_state}
-  end
-
-  def remove_user(channel_id, user_id), do: cast(channel_id, {:remove_user, user_id})
-
-  defp remove_user_impl(user_id, state) do
-    user_ids = Enum.reject(state.user_ids, &(&1 == user_id))
-    new_state = %{state | user_ids: user_ids}
-
-    ws_fan(user_ids, %{
-      "op" => "channel_user_removed",
-      "channel_id" => state.channel_id,
-      "user_id" => user_id
-    })
-
-    case user_ids do
-      [] ->
-        {:stop, :normal, new_state}
-      _ ->
-        {:noreply, new_state}
-    end
-  end
-
-  @impl true
-  def handle_cast({:broadcast_ws, msg}, state), do: broadcast_ws_impl(msg, state)
-  def handle_cast({:add_user, user_id}, state), do: add_user_impl(user_id, state)
-  def handle_cast({:remove_user, user_id}, state), do: remove_user_impl(user_id, state)
 end
 
 defmodule WS.Workers.Supervisors.ChannelSupervisor do

@@ -1,14 +1,21 @@
 import { and, eq } from "drizzle-orm";
 
-import { conversationParticipants, conversations } from "@/database/schema";
-import db from "@/database/db";
-import { userMiddleware } from "@/middlewares/userMiddleware";
+import {
+  conversationParticipants,
+  conversations,
+} from "@server/database/schema";
+import db from "@server/database/db";
+import { userMiddleware } from "@server/middlewares/userMiddleware";
 import Elysia, { t } from "elysia";
-import { user as UserTable } from "@/database/schema/auth";
+import { user as UserTable } from "@server/database/schema/auth";
 
 export const getConversations = new Elysia()
   .derive((context) => userMiddleware(context))
   .get("/conversations", async ({ user }) => {
+    if (!user) {
+      throw new Error("User not authenticated.");
+    }
+
     return await db
       .select()
       .from(conversations)
@@ -74,46 +81,59 @@ export const getConversations = new Elysia()
         throw new Error("Not authorized to view this conversation");
       }
 
-      // Get the conversation with its participants
-      const conversation = await db
+      const [conv] = await db
         .select({
           id: conversations.id,
           name: conversations.name,
           isGroup: conversations.isGroup,
           createdAt: conversations.createdAt,
-          participants: {
-            id: conversationParticipants.id,
-            userId: conversationParticipants.userId,
-            conversationId: conversationParticipants.conversationId,
-            joinedAt: conversationParticipants.joinedAt,
-            user: {
-              id: UserTable.id,
-              name: UserTable.name,
-              email: UserTable.email,
-              image: UserTable.image,
-            },
-          },
         })
         .from(conversations)
-        .leftJoin(
-          conversationParticipants,
-          eq(conversations.id, conversationParticipants.conversationId)
-        )
-        .leftJoin(UserTable, eq(conversationParticipants.userId, UserTable.id))
-        .where(eq(conversations.id, id))
-        .execute();
+        .where(eq(conversations.id, id));
 
-      if (!conversation) {
+      if (!conv) {
         throw new Error("Conversation not found");
       }
 
-      // Group participants
-      const result = {
-        ...conversation[0],
-        participants: conversation.map((conv) => conv.participants),
-      };
+      const participants = await db
+        .select({
+          id: conversationParticipants.id,
+          userId: conversationParticipants.userId,
+          conversationId: conversationParticipants.conversationId,
+          joinedAt: conversationParticipants.joinedAt,
+          user: {
+            id: UserTable.id,
+            name: UserTable.name,
+            email: UserTable.email,
+            image: UserTable.image,
+          },
+        })
+        .from(conversationParticipants)
+        .leftJoin(UserTable, eq(conversationParticipants.userId, UserTable.id))
+        .where(eq(conversationParticipants.conversationId, id));
 
-      return result;
+      const filteredParticipants = participants
+        .filter((p) => p.user !== null)
+        .map((p) => ({
+          id: p.id,
+          userId: p.userId,
+          conversationId: p.conversationId,
+          joinedAt: p.joinedAt,
+          user: {
+            id: p.user!.id,
+            name: p.user!.name,
+            email: p.user!.email,
+            image: p.user!.image,
+          },
+        }));
+
+      return {
+        id: conv.id,
+        name: conv.name,
+        isGroup: conv.isGroup,
+        createdAt: conv.createdAt,
+        participants: filteredParticipants,
+      };
     },
     {
       params: t.Object({

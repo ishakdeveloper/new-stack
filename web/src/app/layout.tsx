@@ -1,12 +1,13 @@
-import QueryProvider from "@/providers/QueryProvider";
+import QueryProvider from "@web/providers/QueryProvider";
 import "./globals.css";
 import Header from "./components/Header";
-import { client } from "@/utils/client";
+import { client } from "@web/utils/client";
 import { headers } from "next/headers";
-import { authClient } from "@/utils/authClient";
-import { SocketProvider } from "@/providers/SocketProvider";
-import { Toaster } from "@/components/ui/toaster";
-import { ThemeProvider } from "@/providers/ThemeProvider";
+import { authClient } from "@web/utils/authClient";
+import { SocketProvider } from "@web/providers/SocketProvider";
+import { Toaster } from "@web/components/ui/toaster";
+import { ThemeProvider } from "@web/providers/ThemeProvider";
+import { VoiceProvider } from "@web/providers/VoiceProvider";
 
 export const metadata = {
   title: "Create Next App",
@@ -29,15 +30,17 @@ export default async function RootLayout({
       <body className="">
         <QueryProvider>
           <SocketProvider session={session?.data}>
-            <ThemeProvider
-              attribute="class"
-              defaultTheme="system"
-              enableSystem
-              disableTransitionOnChange
-            >
-              {children}
-              <Toaster />
-            </ThemeProvider>
+            <VoiceProvider session={session?.data}>
+              <ThemeProvider
+                attribute="class"
+                defaultTheme="system"
+                enableSystem
+                disableTransitionOnChange
+              >
+                {children}
+                <Toaster />
+              </ThemeProvider>
+            </VoiceProvider>
           </SocketProvider>
         </QueryProvider>
       </body>

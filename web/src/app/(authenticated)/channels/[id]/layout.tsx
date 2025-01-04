@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useEffect } from "react";
-import ChannelSidebar from "../ChannelSidebar";
-import { useGuildStore } from "@/stores/useGuildStore";
+import ChannelSidebar from "./ChannelSidebar";
+import { useGuildStore } from "@web/stores/useGuildStore";
 import MembersList from "../MembersList";
 
 export default function GuildLayout({

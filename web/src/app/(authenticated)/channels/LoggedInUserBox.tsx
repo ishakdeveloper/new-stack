@@ -1,22 +1,22 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@web/components/ui/button";
+import { Avatar, AvatarFallback } from "@web/components/ui/avatar";
 import React from "react";
 import Link from "next/link";
-import { authClient } from "@/utils/authClient";
-import { useUserStore } from "@/stores/useUserStore";
-import { ModeToggle } from "@/components/ThemeToggle";
+import { authClient } from "@web/utils/authClient";
+import { useUserStore } from "@web/stores/useUserStore";
+import { ModeToggle } from "@web/components/ThemeToggle";
 import {
   DropdownMenu,
   DropdownMenuSeparator,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@web/components/ui/dropdown-menu";
 import { useRouter } from "next/navigation";
-import { SettingsOverlay } from "@/app/components/SettingsOverlay";
-import { useSocket } from "@/providers/SocketProvider";
+import { SettingsOverlay } from "@web/app/components/SettingsOverlay";
+import { useSocket } from "@web/providers/SocketProvider";
 
 export default function LoggedInUserBox() {
   const currentUser = useUserStore((state) => state.currentUser);

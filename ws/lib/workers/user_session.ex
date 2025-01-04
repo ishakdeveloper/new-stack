@@ -92,6 +92,14 @@ defmodule WS.Workers.UserSession do
   def update_presence(user_id, presence), do: cast(user_id, {:update_presence, presence})
   def get_presence(user_id), do: call(user_id, :get_presence)
 
+  def start_typing(user_id, channel_id) do
+    cast(user_id, {:start_typing, channel_id})
+  end
+
+  def stop_typing(user_id, channel_id) do
+    cast(user_id, {:stop_typing, channel_id})
+  end
+
   @impl true
   def init(opts) do
     user_id = Keyword.fetch!(opts, :user_id)
@@ -204,6 +212,26 @@ defmodule WS.Workers.UserSession do
     new_state = %{state | presence: presence}
     log_state_change("Presence updated", new_state)
     {:noreply, new_state}
+  end
+
+  def handle_cast({:start_typing, channel_id}, state) do
+    WS.PubSub.Broadcaster.broadcast_typing(channel_id, state.user_id)
+
+    # Auto-stop typing after 10 seconds
+    Process.send_after(self(), {:stop_typing, channel_id}, 10_000)
+
+    {:noreply, state}
+  end
+
+  def handle_cast({:stop_typing, channel_id}, state) do
+    WS.PubSub.Broadcaster.broadcast_typing_stop(channel_id, state.user_id)
+    {:noreply, state}
+  end
+
+  # Add session tracking
+  def handle_cast({:update_session, session_data}, state) do
+    WS.PubSub.Broadcaster.broadcast_sessions_replace(state.user_id, session_data)
+    {:noreply, state}
   end
 
   # Helper function to log state changes with safe key access

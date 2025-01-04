@@ -1,14 +1,14 @@
 "use client";
 
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Avatar } from "@/components/ui/avatar";
+import { ScrollArea } from "@web/components/ui/scroll-area";
+import { AvatarFallback, AvatarImage } from "@web/components/ui/avatar";
+import { Avatar } from "@web/components/ui/avatar";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { client } from "@/utils/client";
-import { useGuildStore } from "@/stores/useGuildStore";
+import { client } from "@web/utils/client";
+import { useGuildStore } from "@web/stores/useGuildStore";
 import UserProfilePopup from "./UserProfilePopup";
 import { useEffect, useState } from "react";
-import { useSocket } from "@/providers/SocketProvider";
+import { useSocket } from "@web/providers/SocketProvider";
 
 const MembersList = () => {
   const currentGuildId = useGuildStore((state) => state.currentGuildId);
@@ -16,38 +16,27 @@ const MembersList = () => {
 
   const { data: guildMembers } = useQuery({
     queryKey: ["guildMembers", currentGuildId],
-    queryFn: () =>
-      client.api.guilds({ guildId: currentGuildId ?? "" }).members.get(),
+    queryFn: async () => {
+      const data = await client.api
+        .guilds({ guildId: currentGuildId ?? "" })
+        .members.get();
+      return data.data?.[0][200];
+    },
     enabled: !!currentGuildId,
   });
 
   const { lastMessage } = useSocket();
   const queryClient = useQueryClient();
 
-  useEffect(() => {
-    if (lastMessage) {
-      try {
-        if (
-          lastMessage.data.type === "user_joined_guild" ||
-          lastMessage.data.type === "user_left_guild"
-        ) {
-          queryClient.invalidateQueries({
-            queryKey: ["guildMembers", currentGuildId],
-          });
-        }
-      } catch (error) {
-        console.error("Failed to parse message:", error);
-      }
-    }
-  }, [lastMessage]);
+  useEffect(() => {}, []);
 
   return (
     <div className="w-60 border-l p-4">
       <div className="text-sm font-semibold mb-4">
-        Members — {guildMembers?.data?.length}
+        Members — {guildMembers?.length}
       </div>
       <ScrollArea className="h-full">
-        {guildMembers?.data?.map((member) => (
+        {guildMembers?.map((member) => (
           <div key={member.users.id}>
             {/* Member row */}
             <div
@@ -69,7 +58,7 @@ const MembersList = () => {
                 }}
               />
               <Avatar className="h-8 w-8 mr-2">
-                <AvatarImage src={member.users.image ?? ""} />
+                <AvatarImage src={member.users.avatarUrl ?? ""} />
                 <AvatarFallback>{member.users.name[0]}</AvatarFallback>
               </Avatar>
               <div>{member.users.name}</div>

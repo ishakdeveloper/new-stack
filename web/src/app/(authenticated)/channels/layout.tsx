@@ -7,9 +7,9 @@ import {
   useIsFetching,
   useQueryClient,
 } from "@tanstack/react-query";
-import LoadingScreen from "@/components/LoadingScreen";
-import { client } from "@/utils/client";
-import StatusBar from "@/app/components/StatusBar";
+import LoadingScreen from "@web/components/LoadingScreen";
+import { client } from "@web/utils/client";
+import StatusBar from "@web/app/components/StatusBar";
 
 export default async function ChannelsLayout({
   children,

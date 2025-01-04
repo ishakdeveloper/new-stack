@@ -1,6 +1,9 @@
-import db from "@/database/db";
-import { conversationParticipants, conversations } from "@/database/schema";
-import { userMiddleware } from "@/middlewares/userMiddleware";
+import db from "@server/database/db";
+import {
+  conversationParticipants,
+  conversations,
+} from "@server/database/schema";
+import { userMiddleware } from "@server/middlewares/userMiddleware";
 import Elysia, { t } from "elysia";
 
 // Create a new conversation (DM or group)

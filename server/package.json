@@ -13,25 +13,29 @@
     "db:studio": "bun drizzle-kit studio"
   },
   "dependencies": {
+    "@ap0nia/eden-react-query": "^1.6.0",
     "@elysiajs/cors": "^1.1.1",
     "@elysiajs/opentelemetry": "^1.1.7",
+    "@elysiajs/static": "^1.2.0",
     "@elysiajs/swagger": "^1.1.6",
     "@elysiajs/trpc": "^1.1.0",
     "@elysiajs/websocket": "^0.2.8",
     "@lenoux01/lean-logs": "^1.1.0",
-    "@repo/server": "workspace:*",
+    "@paralleldrive/cuid2": "^2.2.2",
     "@trpc/server": "^10.45.2",
     "amqplib": "^0.10.5",
     "better-auth": "^1.0.7",
     "drizzle-orm": "^0.36.4",
     "drizzle-typebox": "^0.1.1",
-    "elysia": "latest",
+    "elysia": "^1.1.26",
     "pg": "^8.13.1",
+    "superjson": "^2.2.2",
     "uuidv4": "^6.2.13",
     "zod": "^3.23.8"
   },
   "devDependencies": {
     "@types/amqplib": "^0.10.6",
+    "@types/bun": "^1.1.14",
     "@types/pg": "^8.11.10",
     "bun-types": "latest",
     "drizzle-kit": "^0.28.1"

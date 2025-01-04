@@ -30,7 +30,8 @@ defmodule Ws.MixProject do
       {:ecto_enum, "~> 1.4"},
       {:amqp, "~> 4.0.0"},
       {:ranch, "~> 2.1.0", override: true},
-      {:phoenix_pubsub, "~> 2.1.3"}
+      {:phoenix_pubsub, "~> 2.1.3"},
+      {:ex_webrtc, "~> 0.7.0"}
     ]
   end
 end

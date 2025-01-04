@@ -21,7 +21,7 @@ defmodule WS.Messages.Friend.FriendAccept do
 
   def execute(changeset, state) do
     with {:ok, request} <- apply_action(changeset, :create) do
-      WS.PubSub.Broadcaster.broadcast_friend_added(
+      WS.PubSub.Broadcaster.broadcast_friend_accept(
         request.from_user_id,
         request.to_user_id,
         request

@@ -8,6 +8,20 @@
       "when": 1734215995873,
       "tag": "0000_friendly_nomad",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1735217726597,
+      "tag": "0001_natural_sharon_carter",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1735337059570,
+      "tag": "0002_deep_clint_barton",
+      "breakpoints": true
     }
   ]
 }

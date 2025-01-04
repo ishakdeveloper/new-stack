@@ -1,5 +1,6 @@
 "use client";
 
+import { EdenClient, httpBatchLink, httpLink } from "@ap0nia/eden-react-query";
 import {
   QueryClient,
   QueryClientProvider,
@@ -7,7 +8,10 @@ import {
   dehydrate,
 } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
+import { eden } from "@web/utils/client";
 import { PropsWithChildren, useState } from "react";
+import type { App } from "@server";
+import SuperJSON from "superjson";
 
 export default function QueryProvider({ children }: PropsWithChildren) {
   const [queryClient] = useState(
@@ -17,18 +21,25 @@ export default function QueryProvider({ children }: PropsWithChildren) {
           queries: {
             refetchOnWindowFocus: false,
             refetchOnMount: false,
-            staleTime: 60 * 1000,
           },
         },
       })
   );
 
+  const [edenClient] = useState(() =>
+    eden.createClient({
+      links: [
+        // @ts-ignore
+        httpLink({
+          domain: "http://localhost:4000",
+        }),
+      ],
+    })
+  );
+
   return (
-    <QueryClientProvider client={queryClient}>
-      <HydrationBoundary state={dehydrate(queryClient)}>
-        {children}
-      </HydrationBoundary>
-      {/* <ReactQueryDevtools initialIsOpen={true} /> */}
-    </QueryClientProvider>
+    <eden.Provider client={edenClient} queryClient={queryClient}>
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    </eden.Provider>
   );
 }

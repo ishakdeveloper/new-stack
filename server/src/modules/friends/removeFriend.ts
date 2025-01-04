@@ -1,6 +1,6 @@
-import { userMiddleware } from "@/middlewares/userMiddleware";
-import { friendships } from "@/database/schema";
-import db from "@/database/db";
+import { userMiddleware } from "@server/middlewares/userMiddleware";
+import { friendships } from "@server/database/schema";
+import db from "@server/database/db";
 import { and, eq, or } from "drizzle-orm";
 import Elysia, { t } from "elysia";
 
@@ -8,13 +8,13 @@ import Elysia, { t } from "elysia";
 export const removeFriend = new Elysia()
   .derive((context) => userMiddleware(context))
   .delete(
-    "/friendships/:id",
-    async ({ params, user }) => {
+    "/friendships",
+    async ({ body, user }) => {
       if (!user?.id) {
         throw new Error("User not authenticated.");
       }
 
-      const { id } = params;
+      const { id } = body;
 
       return await db.transaction(async (tx) => {
         // Check if the friendship exists and user is part of it (with "accepted" status)
@@ -40,14 +40,30 @@ export const removeFriend = new Elysia()
         }
 
         // Delete the friendship from the database
-        await tx.delete(friendships).where(eq(friendships.id, id));
+        const deleted = await tx
+          .delete(friendships)
+          .where(eq(friendships.id, id))
+          .returning();
 
-        return { success: true };
+        return {
+          id: deleted[0].id,
+          requesterId: deleted[0].requesterId,
+          addresseeId: deleted[0].addresseeId,
+          status: deleted[0].status,
+          createdAt: deleted[0].createdAt,
+        };
       });
     },
     {
-      params: t.Object({
+      body: t.Object({
         id: t.String(),
+      }),
+      response: t.Object({
+        id: t.String(),
+        requesterId: t.String(),
+        addresseeId: t.String(),
+        status: t.String(),
+        createdAt: t.Date(),
       }),
     }
   );

@@ -5,10 +5,10 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "@/components/ui/popover";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
+} from "@web/components/ui/popover";
+import { Avatar, AvatarFallback, AvatarImage } from "@web/components/ui/avatar";
+import { Button } from "@web/components/ui/button";
+import { Separator } from "@web/components/ui/separator";
 import { MessageSquare, UserPlus, MoreHorizontal } from "lucide-react";
 
 interface UserProfileProps {

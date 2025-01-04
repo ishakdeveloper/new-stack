@@ -1,9 +1,9 @@
-import { conversationParticipants } from "@/database/schema";
-import db from "@/database/db";
-import { userMiddleware } from "@/middlewares/userMiddleware";
+import { conversationParticipants } from "@server/database/schema";
+import db from "@server/database/db";
+import { userMiddleware } from "@server/middlewares/userMiddleware";
 import Elysia, { t } from "elysia";
 import { eq } from "drizzle-orm";
-import { user as UserTable } from "@/database/schema/auth";
+import { user as UserTable } from "@server/database/schema/auth";
 
 export const getConversationMembers = new Elysia()
   .derive((context) => userMiddleware(context))
@@ -31,7 +31,14 @@ export const getConversationMembers = new Elysia()
         .execute();
 
       return {
-        participants,
+        200: {
+          participants: participants
+            .filter((p) => p.user !== null)
+            .map((p) => ({
+              ...p,
+              user: p.user!,
+            })),
+        },
       };
     },
     {
@@ -39,20 +46,22 @@ export const getConversationMembers = new Elysia()
         id: t.String(),
       }),
       response: t.Object({
-        participants: t.Array(
-          t.Object({
-            id: t.String(),
-            userId: t.String(),
-            conversationId: t.String(),
-            joinedAt: t.Date(),
-            user: t.Object({
+        200: t.Object({
+          participants: t.Array(
+            t.Object({
               id: t.String(),
-              name: t.String(),
-              email: t.String(),
-              image: t.Union([t.String(), t.Null()]),
-            }),
-          })
-        ),
+              userId: t.String(),
+              conversationId: t.String(),
+              joinedAt: t.Date(),
+              user: t.Object({
+                id: t.String(),
+                name: t.String(),
+                email: t.String(),
+                image: t.Union([t.String(), t.Null()]),
+              }),
+            })
+          ),
+        }),
       }),
     }
   );

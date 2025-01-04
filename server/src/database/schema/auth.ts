@@ -6,6 +6,7 @@ import {
   uniqueIndex,
   uuid,
   varchar,
+  integer,
 } from "drizzle-orm/pg-core";
 
 export const user = pgTable("user", {
@@ -14,17 +15,44 @@ export const user = pgTable("user", {
   nickname: text("nickname")
     .notNull()
     .$defaultFn(() => {
-      // Generate random 4 digit number
       const randomNum = Math.floor(1000 + Math.random() * 9000);
       return `user${randomNum}`;
     }),
+  discriminator: text("discriminator")
+    .notNull()
+    .$defaultFn(() => {
+      return Math.floor(1000 + Math.random() * 9000).toString();
+    }),
   email: text("email").notNull().unique(),
   emailVerified: boolean("emailVerified").notNull(),
+
+  // Profile customization
   image: text("image"),
+  banner: text("banner"),
+  accentColor: text("accentColor"),
+  bio: text("bio"),
+  pronouns: text("pronouns"),
+
+  // Status & Presence
+  status: text("status").notNull().default("offline"),
+  customStatus: text("customStatus"),
+  currentActivity: text("currentActivity"),
+
+  // Account flags & badges
+  isPremium: boolean("isPremium").default(false),
+  badges: text("badges").array(),
+  flags: integer("flags").default(0),
+
+  // Preferences
+  theme: text("theme").default("dark"),
+  enableDM: boolean("enableDM").default(true),
+  locale: text("locale").default("en-US"),
+
+  // Timestamps
   createdAt: timestamp("createdAt").notNull(),
   updatedAt: timestamp("updatedAt").notNull(),
-  bio: text("bio"),
-  banner: text("banner"),
+  lastOnline: timestamp("lastOnline"),
+  premiumSince: timestamp("premiumSince"),
 });
 
 export const session = pgTable("session", {

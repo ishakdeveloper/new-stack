@@ -1,14 +1,14 @@
 "use client";
 
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { authClient } from "@/utils/authClient";
-import { client } from "@/utils/client";
+import { ScrollArea } from "@web/components/ui/scroll-area";
+import { Avatar, AvatarFallback } from "@web/components/ui/avatar";
+import { authClient } from "@web/utils/authClient";
+import { client } from "@web/utils/client";
 import { useQuery } from "@tanstack/react-query";
-import { useChatStore } from "@/stores/useChatStore";
+import { useChatStore } from "@web/stores/useChatStore";
 import { Users } from "lucide-react";
 import { useState } from "react";
-import UserProfilePopup from "@/app/(authenticated)/channels/UserProfilePopup";
+import UserProfilePopup from "@web/app/(authenticated)/channels/UserProfilePopup";
 
 const GroupMembers = () => {
   const session = authClient.useSession();
@@ -21,7 +21,7 @@ const GroupMembers = () => {
       const members = await client.api
         .conversations({ id: currentChatId ?? "" })
         .members.get();
-      return members.data;
+      return members.data?.[200];
     },
     enabled: !!currentChatId,
   });

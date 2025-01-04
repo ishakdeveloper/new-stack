@@ -1,10 +1,13 @@
-import { messages } from "@/database/schema";
-import { userMiddleware } from "@/middlewares/userMiddleware";
-import db from "@/database/db";
-import { conversationParticipants, conversations } from "@/database/schema";
+import { messages } from "@server/database/schema";
+import { userMiddleware } from "@server/middlewares/userMiddleware";
+import db from "@server/database/db";
+import {
+  conversationParticipants,
+  conversations,
+} from "@server/database/schema";
 import Elysia, { t } from "elysia";
 import { eq, and, inArray } from "drizzle-orm";
-import { user as UserTable } from "@/database/schema/auth";
+import { user as UserTable } from "@server/database/schema/auth";
 import { sendSystemMessageHandler } from "../messages/sendSystemMessageHandler";
 
 export const joinGroup = new Elysia()
@@ -64,6 +67,9 @@ export const joinGroup = new Elysia()
     {
       params: t.Object({
         id: t.String(),
+      }),
+      response: t.Object({
+        message: t.String(),
       }),
     }
   )
@@ -138,6 +144,9 @@ export const joinGroup = new Elysia()
       }),
       body: t.Object({
         memberIds: t.Array(t.String()),
+      }),
+      response: t.Object({
+        message: t.String(),
       }),
     }
   );

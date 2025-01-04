@@ -1,4 +1,4 @@
-import db from "@/database/db";
+import db from "@server/database/db";
 import amqp from "amqplib";
 import { eq } from "drizzle-orm";
 import * as authSchema from "../database/schema/auth";

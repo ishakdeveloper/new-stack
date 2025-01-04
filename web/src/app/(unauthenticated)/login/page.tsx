@@ -1,7 +1,7 @@
 "use client";
 
 import { useForm } from "react-hook-form";
-import { Button } from "@/components/ui/button";
+import { Button } from "@web/components/ui/button";
 import {
   Card,
   CardContent,
@@ -9,15 +9,15 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
-import { Icons } from "@/components/ui/icons";
-import { authClient } from "@/utils/authClient";
-import { useUserStore } from "@/stores/useUserStore";
-import { Opcodes, useSocket } from "@/providers/SocketProvider";
+} from "@web/components/ui/card";
+import { Checkbox } from "@web/components/ui/checkbox";
+import { Input } from "@web/components/ui/input";
+import { Label } from "@web/components/ui/label";
+import { Separator } from "@web/components/ui/separator";
+import { Icons } from "@web/components/ui/icons";
+import { authClient } from "@web/utils/authClient";
+import { useUserStore } from "@web/stores/useUserStore";
+import { Opcodes, useSocket } from "@web/providers/SocketProvider";
 
 type FormData = {
   email: string;
@@ -49,12 +49,30 @@ export default function LoginScreen() {
           op: Opcodes.Identify,
           d: user.data?.user,
         });
+
+        setCurrentUser(user.data?.user ?? null);
       });
   };
 
-  const handleSocialLogin = (provider: string) => {
+  const handleSocialLogin = async (provider: string) => {
     // Handle social login logic here
     console.log(`Login attempted with ${provider}`);
+    await authClient.signIn.social({
+      provider: provider as
+        | "github"
+        | "apple"
+        | "discord"
+        | "facebook"
+        | "microsoft"
+        | "google"
+        | "spotify"
+        | "twitch"
+        | "twitter"
+        | "dropbox"
+        | "linkedin"
+        | "gitlab",
+      callbackURL: "/channels/me",
+    });
   };
 
   return (
@@ -137,21 +155,21 @@ export default function LoginScreen() {
             <div className="flex flex-col space-y-2">
               <Button
                 variant="outline"
-                onClick={() => handleSocialLogin("Google")}
+                onClick={() => handleSocialLogin("google")}
                 className="w-full"
               >
                 <Icons.google className="mr-2 h-4 w-4" /> Sign in with Google
               </Button>
               <Button
                 variant="outline"
-                onClick={() => handleSocialLogin("Discord")}
+                onClick={() => handleSocialLogin("discord")}
                 className="w-full"
               >
                 <Icons.discord className="mr-2 h-4 w-4" /> Sign in with Discord
               </Button>
               <Button
                 variant="outline"
-                onClick={() => handleSocialLogin("Apple")}
+                onClick={() => handleSocialLogin("apple")}
                 className="w-full"
               >
                 <Icons.apple className="mr-2 h-4 w-4" /> Sign in with Apple

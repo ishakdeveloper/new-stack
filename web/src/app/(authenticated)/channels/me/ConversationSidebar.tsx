@@ -1,25 +1,24 @@
 "use client";
 
-import { AvatarFallback } from "@/components/ui/avatar";
-import { Avatar } from "@/components/ui/avatar";
-import { Button, buttonVariants } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { authClient } from "@/utils/authClient";
-import { client } from "@/utils/client";
+import { AvatarFallback } from "@web/components/ui/avatar";
+import { Avatar } from "@web/components/ui/avatar";
+import { Button, buttonVariants } from "@web/components/ui/button";
+import { Input } from "@web/components/ui/input";
+import { ScrollArea } from "@web/components/ui/scroll-area";
+import { authClient } from "@web/utils/authClient";
+import { client, eden } from "@web/utils/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Users, Inbox, HelpCircle, Settings, Plus, Link } from "lucide-react";
 import NextLink from "next/link";
 import { useEffect } from "react";
 import LoggedInUserBox from "../LoggedInUserBox";
-import { useChatStore } from "@/stores/useChatStore";
+import { useChatStore } from "@web/stores/useChatStore";
 import { useRouter } from "next/navigation";
-import { cn } from "@/lib/utils";
+import { cn } from "@web/lib/utils";
 import { SelectGroupMembers } from "./SelectGroupMembers";
-import { useSocket } from "@/providers/SocketProvider";
-import { useToast } from "@/hooks/use-toast";
-import { Opcodes } from "@/providers/SocketProvider";
-
+import { useSocket } from "@web/providers/SocketProvider";
+import { useToast } from "@web/hooks/use-toast";
+import { Opcodes } from "@web/providers/SocketProvider";
 const ConversationSidebar = () => {
   const session = authClient.useSession();
   const {
@@ -28,13 +27,15 @@ const ConversationSidebar = () => {
     sendMessage: sendSocketMessage,
   } = useSocket();
   const queryClient = useQueryClient();
-  const { data: conversations } = useQuery({
-    queryKey: ["conversations", session.data?.user?.id],
-    queryFn: async () => {
-      const conversations = await client.api.conversations.get();
-      return conversations.data;
-    },
-  });
+  // const { data: conversations } = useQuery({
+  //   queryKey: ["conversations", session.data?.user?.id],
+  //   queryFn: async () => {
+  //     const conversations = await client.api.conversations.get();
+  //     return conversations.data;
+  //   },
+  // });
+
+  const { data: conversations } = eden.api.conversations.get.useQuery();
 
   const router = useRouter();
   const { toast } = useToast();
@@ -43,27 +44,31 @@ const ConversationSidebar = () => {
   const currentChatId = useChatStore((state) => state.currentChatId);
   const setOneOnOnePartner = useChatStore((state) => state.setOneOnOnePartner);
 
-  const getConversationName = (conversation: any) => {
+  const getConversationName = (
+    conversation: NonNullable<typeof conversations>[number]
+  ) => {
     if (conversation.isGroup) {
       const participantNames = conversation.participants
-        .filter((p: any) => p.user && p.user.name)
-        .map((p: any) => p.user.name);
+        .filter((p) => p.user && p.user.name)
+        .map((p) => p.user.name);
       return participantNames.join(", ") || "Unnamed Group";
     } else {
       const otherParticipant = conversation.participants.find(
-        (p: any) => p.user?.id !== session.data?.user?.id
+        (p) => p.user?.id !== session.data?.user?.id
       );
       return otherParticipant?.user?.name || "Unknown User";
     }
   };
 
-  const handleConversationClick = (conversation: any) => {
+  const handleConversationClick = (
+    conversation: NonNullable<typeof conversations>[number]
+  ) => {
     if (currentChatId === conversation.id) {
       return;
     }
 
     const otherParticipant = conversation.participants.find(
-      (p: any) => p.user?.id !== session.data?.user?.id
+      (p) => p.user?.id !== session.data?.user?.id
     );
 
     if (otherParticipant?.user?.id) {
@@ -91,15 +96,17 @@ const ConversationSidebar = () => {
     router.push(`/channels/me/${conversation.id}`);
   };
 
-  const getAvatarText = (conversation: any) => {
+  const getAvatarText = (
+    conversation: NonNullable<typeof conversations>[number]
+  ) => {
     if (conversation.isGroup) {
       const validParticipants = conversation.participants
-        .filter((p: any) => p.user?.name)
+        .filter((p) => p.user?.name)
         .slice(0, 2);
-      return validParticipants.map((p: any) => p.user.name[0]).join("") || "G";
+      return validParticipants.map((p) => p.user.name[0]).join("") || "G";
     } else {
       const otherParticipant = conversation.participants.find(
-        (p: any) => p.user?.id !== session.data?.user?.id
+        (p) => p.user?.id !== session.data?.user?.id
       );
       return otherParticipant?.user?.name?.[0] || "?";
     }

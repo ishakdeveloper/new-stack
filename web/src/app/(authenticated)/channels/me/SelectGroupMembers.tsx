@@ -2,23 +2,23 @@
 
 import * as React from "react";
 import { Plus, Search, X, User } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@web/components/ui/button";
+import { Input } from "@web/components/ui/input";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "@/components/ui/popover";
-import { Checkbox } from "@/components/ui/checkbox";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+} from "@web/components/ui/popover";
+import { Checkbox } from "@web/components/ui/checkbox";
+import { ScrollArea } from "@web/components/ui/scroll-area";
+import { Badge } from "@web/components/ui/badge";
+import { Avatar, AvatarImage, AvatarFallback } from "@web/components/ui/avatar";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { client } from "@/utils/client";
-import { authClient } from "@/utils/authClient";
-import { Icons } from "@/components/ui/icons";
-import { useSocket } from "@/providers/SocketProvider";
-import { useChatStore } from "@/stores/useChatStore";
+import { client } from "@web/utils/client";
+import { authClient } from "@web/utils/authClient";
+import { Icons } from "@web/components/ui/icons";
+import { useSocket } from "@web/providers/SocketProvider";
+import { useChatStore } from "@web/stores/useChatStore";
 
 interface Friend {
   id: string;

@@ -1,18 +1,18 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@web/components/ui/button";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
-import { useUserStore } from "@/stores/useUserStore";
-import { ModeToggle } from "@/components/ThemeToggle";
+} from "@web/components/ui/card";
+import { Input } from "@web/components/ui/input";
+import { Label } from "@web/components/ui/label";
+import { Separator } from "@web/components/ui/separator";
+import { useUserStore } from "@web/stores/useUserStore";
+import { ModeToggle } from "@web/components/ThemeToggle";
 
 export default function SettingsPage() {
   const currentUser = useUserStore((state) => state.currentUser);

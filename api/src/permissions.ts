@@ -1,0 +1,17 @@
+export const GUILD_PERMISSIONS = {
+  ADMINISTRATOR: 1n << 0n,
+  MANAGE_GUILD: 1n << 1n,
+  MANAGE_ROLES: 1n << 2n,
+  MANAGE_CHANNELS: 1n << 3n,
+  MANAGE_MESSAGES: 1n << 4n,
+  MANAGE_NICKNAMES: 1n << 5n,
+  KICK_MEMBERS: 1n << 6n,
+  BAN_MEMBERS: 1n << 7n,
+  CREATE_INVITES: 1n << 8n,
+  SEND_MESSAGES: 1n << 9n,
+  EMBED_LINKS: 1n << 10n,
+  ATTACH_FILES: 1n << 11n,
+  ADD_REACTIONS: 1n << 12n,
+  MENTION_EVERYONE: 1n << 13n,
+  VIEW_CHANNELS: 1n << 14n,
+} as const;

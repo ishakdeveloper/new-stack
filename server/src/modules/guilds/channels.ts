@@ -1,10 +1,10 @@
 import Elysia, { t } from "elysia";
-import { userMiddleware } from "@/middlewares/userMiddleware";
-import { categories, guildMembers, guilds } from "@/database/schema";
+import { userMiddleware } from "@server/middlewares/userMiddleware";
+import { categories, guildMembers, guilds } from "@server/database/schema";
 import { and, eq, isNull } from "drizzle-orm";
-import { channels } from "@/database/schema";
-import db from "@/database/db";
-import { generateChannelSlug } from "@/lib/generateChannelSlug";
+import { channels } from "@server/database/schema";
+import db from "@server/database/db";
+import { generateChannelSlug } from "@server/lib/generateChannelSlug";
 
 export const channelRoutes = new Elysia()
   .derive((context) => userMiddleware(context))
@@ -135,12 +135,23 @@ export const channelRoutes = new Elysia()
       });
     },
     {
+      params: t.Object({
+        guildId: t.String(),
+      }),
       body: t.Object({
         name: t.String(),
       }),
+      response: t.Object({
+        id: t.String(),
+        name: t.String(),
+        guildId: t.String(),
+        position: t.Number(),
+        isPrivate: t.Boolean(),
+        createdAt: t.Date(),
+        updatedAt: t.Date(),
+      }),
     }
   )
-
   // Create a channel in a category
   .post(
     "/guilds/:guildId/categories/:categoryId/channels",
@@ -149,23 +160,41 @@ export const channelRoutes = new Elysia()
       const { name } = body;
       const slug = generateChannelSlug(name);
 
-      return await db.transaction(async (tx) => {
-        const channel = await tx
-          .insert(channels)
-          .values({
-            name,
-            categoryId,
-            guildId,
-            slug,
-          })
-          .returning();
+      const [channel] = await db
+        .insert(channels)
+        .values({
+          name,
+          categoryId,
+          guildId,
+          slug,
+        })
+        .returning();
 
-        return channel[0];
-      });
+      return {
+        200: {
+          ...channel,
+          categoryId: channel.categoryId!,
+        },
+      };
     },
     {
+      params: t.Object({
+        guildId: t.String(),
+        categoryId: t.String(),
+      }),
       body: t.Object({
         name: t.String(),
+      }),
+      response: t.Object({
+        id: t.String(),
+        name: t.String(),
+        slug: t.String(),
+        categoryId: t.String(),
+        guildId: t.String(),
+        position: t.Number(),
+        isPrivate: t.Boolean(),
+        createdAt: t.Date(),
+        updatedAt: t.Date(),
       }),
     }
   )
@@ -194,14 +223,25 @@ export const channelRoutes = new Elysia()
       });
     },
     {
+      params: t.Object({
+        guildId: t.String(),
+      }),
       body: t.Object({
         name: t.String(),
         categoryId: t.Optional(t.String()),
         position: t.Optional(t.Number()),
         isPrivate: t.Optional(t.Boolean()),
       }),
-      params: t.Object({
+      response: t.Object({
+        id: t.String(),
+        name: t.String(),
+        slug: t.String(),
+        categoryId: t.Union([t.String(), t.Null()]),
         guildId: t.String(),
+        position: t.Number(),
+        isPrivate: t.Boolean(),
+        createdAt: t.Date(),
+        updatedAt: t.Date(),
       }),
     }
   )
@@ -211,20 +251,37 @@ export const channelRoutes = new Elysia()
     async ({ params, body }) => {
       const { channelId } = params;
 
-      return await db.transaction(async (tx) => {
-        const updatedChannel = await tx
-          .update(channels)
-          .set(body)
-          .where(eq(channels.id, channelId));
-        return updatedChannel;
-      });
+      const [updatedChannel] = await db
+        .update(channels)
+        .set(body)
+        .where(eq(channels.id, channelId))
+        .returning();
+
+      return {
+        200: updatedChannel,
+      };
     },
     {
+      params: t.Object({
+        guildId: t.String(),
+        channelId: t.String(),
+      }),
       body: t.Object({
         name: t.String(),
         categoryId: t.Optional(t.String()),
         position: t.Optional(t.Number()),
         isPrivate: t.Optional(t.Boolean()),
+      }),
+      response: t.Object({
+        id: t.String(),
+        name: t.String(),
+        slug: t.String(),
+        categoryId: t.Union([t.String(), t.Null()]),
+        guildId: t.String(),
+        position: t.Number(),
+        isPrivate: t.Boolean(),
+        createdAt: t.Date(),
+        updatedAt: t.Date(),
       }),
     }
   )
@@ -234,23 +291,36 @@ export const channelRoutes = new Elysia()
     async ({ params, body }) => {
       const { channelId, newPosition, newCategoryId } = body;
 
-      return await db.transaction(async (tx) => {
-        const updatedChannel = await tx
-          .update(channels)
-          .set({
-            position: newPosition,
-            categoryId: newCategoryId || null,
-          })
-          .where(eq(channels.id, channelId));
+      const [updatedChannel] = await db
+        .update(channels)
+        .set({
+          position: newPosition,
+          categoryId: newCategoryId || null,
+        })
+        .where(eq(channels.id, channelId))
+        .returning();
 
-        return updatedChannel;
-      });
+      return updatedChannel;
     },
     {
+      params: t.Object({
+        guildId: t.String(),
+      }),
       body: t.Object({
         channelId: t.String(),
         newPosition: t.Number(),
         newCategoryId: t.Optional(t.String()),
+      }),
+      response: t.Object({
+        id: t.String(),
+        name: t.String(),
+        slug: t.String(),
+        categoryId: t.Union([t.String(), t.Null()]),
+        guildId: t.String(),
+        position: t.Number(),
+        isPrivate: t.Boolean(),
+        createdAt: t.Date(),
+        updatedAt: t.Date(),
       }),
     }
   );

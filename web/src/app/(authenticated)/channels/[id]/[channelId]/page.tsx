@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useEffect } from "react";
-import { useGuildStore } from "@/stores/useGuildStore";
-import ChatArea from "../../ChatArea";
-import { useSocket } from "@/providers/SocketProvider";
+import { useGuildStore } from "@web/stores/useGuildStore";
+import ChatArea from "../ChatArea";
+import { useSocket } from "@web/providers/SocketProvider";
 
 export default function ChannelPage({
   params,

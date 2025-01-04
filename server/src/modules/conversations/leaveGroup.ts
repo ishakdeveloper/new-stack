@@ -1,8 +1,10 @@
-import { messages } from "@/database/schema";
-
-import { userMiddleware } from "@/middlewares/userMiddleware";
-import db from "@/database/db";
-import { conversationParticipants, conversations } from "@/database/schema";
+import { messages } from "@server/database/schema";
+import { userMiddleware } from "@server/middlewares/userMiddleware";
+import db from "@server/database/db";
+import {
+  conversationParticipants,
+  conversations,
+} from "@server/database/schema";
 import Elysia, { t } from "elysia";
 import { eq, and } from "drizzle-orm";
 
@@ -55,6 +57,10 @@ export const leaveGroup = new Elysia()
     {
       params: t.Object({
         id: t.String(),
+      }),
+      body: t.Object({}),
+      response: t.Object({
+        message: t.String(),
       }),
     }
   );

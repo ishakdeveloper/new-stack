@@ -1,8 +1,7 @@
-import { messages } from "@/database/schema";
-
-import { userMiddleware } from "@/middlewares/userMiddleware";
-import db from "@/database/db";
-import { conversationParticipants } from "@/database/schema";
+import { messages } from "@server/database/schema";
+import { userMiddleware } from "@server/middlewares/userMiddleware";
+import db from "@server/database/db";
+import { conversationParticipants } from "@server/database/schema";
 import Elysia, { t } from "elysia";
 import { and, eq } from "drizzle-orm";
 
@@ -36,7 +35,16 @@ export const sendConversationMessage = new Elysia()
         })
         .returning();
 
-      return message;
+      return {
+        200: {
+          id: message.id,
+          conversationId: message.conversationId!,
+          content: message.content!,
+          authorId: message.authorId,
+          createdAt: message.createdAt,
+          isSystem: message.isSystem,
+        },
+      };
     },
     {
       params: t.Object({
@@ -44,6 +52,14 @@ export const sendConversationMessage = new Elysia()
       }),
       body: t.Object({
         content: t.String(),
+      }),
+      response: t.Object({
+        id: t.String(),
+        conversationId: t.String(),
+        content: t.String(),
+        authorId: t.String(),
+        createdAt: t.Date(),
+        isSystem: t.Boolean(),
       }),
     }
   );
