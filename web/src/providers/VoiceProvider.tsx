@@ -8,8 +8,9 @@ import React, {
   useState,
   useRef,
 } from "react";
-import { useSocket, Opcodes } from "./SocketProvider";
-import { Session } from "@web/utils/authClient";
+import { Opcodes } from "@repo/api";
+import { useSocket } from "@web/providers/SocketProvider";
+import { authClient } from "@web/utils/authClient";
 
 type VoiceContextType = {
   joinVoiceChannel: (channelId: string) => Promise<void>;
@@ -53,8 +54,7 @@ type PeerConnection = {
 
 export const VoiceProvider: React.FC<{
   children: React.ReactNode;
-  session: Session | null;
-}> = ({ children, session }) => {
+}> = ({ children }) => {
   const { sendMessage, onMessage } = useSocket();
   const [isMuted, setIsMuted] = useState(false);
   const [isDeafened, setIsDeafened] = useState(false);
@@ -74,6 +74,8 @@ export const VoiceProvider: React.FC<{
 
   const SPEAKING_THRESHOLD = -45; // dB
   const SPEAKING_DETECTION_INTERVAL = 100; // ms
+
+  const session = authClient.useSession();
 
   const detectSpeaking = useCallback((audioData: Uint8Array): boolean => {
     // Convert audio data to dB
@@ -331,7 +333,7 @@ export const VoiceProvider: React.FC<{
       if (!currentChannelId || !localStreamRef.current) return;
 
       const { from_user, to_user, signal } = data;
-      if (to_user !== session?.user?.id) return;
+      if (to_user !== session?.data?.user?.id) return;
 
       let peerConnection = peerConnections.current.get(from_user)?.connection;
 
@@ -378,7 +380,7 @@ export const VoiceProvider: React.FC<{
     return () => unsubscribe();
   }, [
     currentChannelId,
-    session?.user?.id,
+    session?.data?.user?.id,
     createPeerConnection,
     sendMessage,
     onMessage,

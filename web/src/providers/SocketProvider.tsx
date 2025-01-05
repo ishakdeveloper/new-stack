@@ -11,177 +11,16 @@ import React, {
   useMemo,
 } from "react";
 import pako from "pako";
-import { User } from "better-auth/types";
-
-// Update or extend the User type to match the server response
-type ExtendedUser = User & {
-  emailVerified: boolean;
-  createdAt: string;
-  updatedAt: string;
-};
-
-// Discord-like Gateway Opcodes
-export enum Opcodes {
-  // Connection & Authentication (0-9)
-  Dispatch = 0,
-  Heartbeat = 1,
-  Identify = 2,
-  Presence = 3,
-  Ready = 4,
-  Resume = 6,
-  Reconnect = 7,
-  RequestGuildMembers = 8,
-  InvalidSession = 9,
-
-  // Connection Lifecycle (10-14)
-  Hello = 10,
-  HeartbeatAck = 11,
-
-  // Guild Events (15-29)
-  GuildCreate = 15,
-  GuildUpdate = 16,
-  GuildDelete = 17,
-  GuildMemberAdd = 24,
-  GuildMemberUpdate = 25,
-  GuildMemberRemove = 26,
-  GuildRoleCreate = 27,
-  GuildRoleUpdate = 28,
-  GuildRoleDelete = 29,
-
-  // Channel Events (30-39)
-  ChannelCreate = 30,
-  ChannelUpdate = 31,
-  ChannelDelete = 32,
-  ChannelPinsUpdate = 33,
-  ChannelJoin = 34,
-  ChannelLeave = 35,
-  ChannelTyping = 36,
-
-  // Message Events (40-49)
-  MessageCreate = 40,
-  MessageUpdate = 41,
-  MessageDelete = 42,
-  MessageDeleteBulk = 43,
-  MessageReactionAdd = 44,
-  MessageReactionRemove = 45,
-  MessageReactionRemoveAll = 46,
-
-  // Friend/Relationship Events (50-59)
-  FriendRequest = 50,
-  FriendAccept = 51,
-  FriendDecline = 52,
-  FriendRemove = 53,
-  RelationshipAdd = 54,
-  RelationshipRemove = 55,
-
-  // Voice Events (60-69)
-  VoiceStateUpdate = 60,
-  VoiceServerUpdate = 61,
-  VoiceConnect = 62,
-  VoiceDisconnect = 63,
-  VoiceMute = 64,
-  VoiceDeafen = 65,
-  VoiceSignal = 66,
-
-  // User Events (70-79)
-  UserUpdate = 70,
-  UserNoteUpdate = 71,
-  UserSettingsUpdate = 72,
-  UserConnectionsUpdate = 73,
-
-  // Presence Events (80-89)
-  PresenceUpdate = 80,
-  SessionsReplace = 81,
-  TypingStart = 82,
-  TypingStop = 83,
-
-  // Thread Events (90-99)
-  ThreadCreate = 90,
-  ThreadUpdate = 91,
-  ThreadDelete = 92,
-  ThreadMemberUpdate = 93,
-  ThreadMembersUpdate = 94,
-
-  PubSubEvent = "pubsub_event",
-}
-
-export type PubSubEvents =
-  // Guild Events
-  | "guild_member_added"
-  | "guild_member_removed"
-  | "guild_member_updated"
-  | "guild_role_created"
-  | "guild_role_updated"
-  | "guild_role_deleted"
-  | "user_left_guild"
-  | "user_joined_guild"
-
-  // Channel Events
-  | "user_created_channel"
-  | "user_updated_channel"
-  | "user_deleted_channel"
-  | "channel_pins_updated"
-  | "channel_joined"
-  | "channel_left"
-
-  // Message Events
-  | "message_create"
-  | "message_update"
-  | "message_delete"
-  | "message_delete_bulk"
-  | "message_reaction_add"
-  | "message_reaction_remove"
-  | "message_reaction_remove_all"
-
-  // Friend/Relationship Events
-  | "friend_request_received"
-  | "friend_request_accepted"
-  | "friend_request_declined"
-  | "friend_removed"
-  | "relationship_added"
-  | "relationship_removed"
-
-  // Voice Events
-  | "voice_state_updated"
-  | "voice_server_updated"
-  | "voice_connected"
-  | "voice_disconnected"
-  | "voice_muted"
-  | "voice_deafened"
-  | "voice_signal"
-
-  // User Events
-  | "user_updated"
-  | "user_note_updated"
-  | "user_settings_updated"
-  | "user_connections_updated"
-
-  // Presence Events
-  | "presence_updated"
-  | "sessions_replaced"
-  | "typing_started"
-  | "typing_stopped"
-
-  // Thread Events
-  | "thread_created"
-  | "thread_updated"
-  | "thread_deleted"
-  | "thread_member_updated"
-  | "thread_members_updated";
-
-type WSMessage = {
-  op: Opcodes;
-  d: any;
-  s?: number;
-  t?: string;
-};
+import { User } from "@repo/server";
+import { WSMessage } from "@repo/api";
+import { Opcodes, PubSubEvents } from "@repo/api";
 
 type SocketContextType = {
   sendMessage: (message: WSMessage) => void;
   lastMessage: WSMessage | null;
   isConnected: boolean;
-  setUser: (user: ExtendedUser | null) => void;
-  user: ExtendedUser | null;
+  setUser: (user: User | null) => void;
+  user: User | null;
   onMessage: (
     eventType: string,
     callback: (payload: any) => void
@@ -199,7 +38,7 @@ export const SocketProvider: React.FC<{
   const wsRef = useRef<WebSocket | null>(null);
   const [lastMessage, setLastMessage] = useState<WSMessage | null>(null);
   const lastPongRef = useRef<number>(Date.now());
-  const [user, setUser] = useState<ExtendedUser | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   );

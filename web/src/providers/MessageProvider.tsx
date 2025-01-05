@@ -1,9 +1,10 @@
 "use client";
 
 import { createContext, useContext, useEffect, useCallback } from "react";
-import { PubSubEvents, useSocket } from "./SocketProvider";
 import { useGuildStore } from "@web/stores/useGuildStore";
 import { eden } from "@web/utils/client";
+import { useSocket } from "./SocketProvider";
+import { PubSubEvents } from "@repo/api";
 
 const MessageContext = createContext({});
 

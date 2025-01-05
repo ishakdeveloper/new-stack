@@ -1,24 +1,21 @@
 import { treaty } from "@elysiajs/eden";
 import type { App } from "@server";
-import { authClient } from "./authClient";
 import {
   createEdenTreatyReactQuery,
-  httpBatchLink,
   InferTreatyQueryInput,
   InferTreatyQueryOutput,
 } from "@ap0nia/eden-react-query";
 
-// export const client = treaty<App>("http://localhost:4000/", {
-//   authClient,
-// });
-
+// @ts-ignore
 export const eden = createEdenTreatyReactQuery<App>({
   fetch: {
     credentials: "include",
   },
 });
 
+// @ts-ignore
 export type InferInput = InferTreatyQueryInput<App>;
+// @ts-ignore
 export type InferOutput = InferTreatyQueryOutput<App>;
 
 export const client = treaty<App>("http://localhost:4000", {

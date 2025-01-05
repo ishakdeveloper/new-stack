@@ -16,7 +16,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useMutation } from "@tanstack/react-query";
 import { client } from "@web/utils/client";
 import { useState } from "react";
-import { Opcodes, useSocket } from "@web/providers/SocketProvider";
+import { useSocket } from "@web/providers/SocketProvider";
+import { Opcodes } from "@repo/api";
 
 interface CreateChannelModalProps {
   isOpen: boolean;
