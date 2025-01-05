@@ -4,7 +4,8 @@ import { eden } from "@web/utils/client";
 
 import { authClient } from "@web/utils/authClient";
 
-import { Opcodes, useSocket } from "@web/providers/SocketProvider";
+import { useSocket } from "@web/providers/SocketProvider";
+import { Opcodes } from "@repo/api";
 
 import { useToast } from "./use-toast";
 
@@ -21,25 +22,34 @@ export const useFriends = () => {
     eden.api.friendships.pending.get.useQuery();
 
   useEffect(() => {
-    const unsubscribeRequest = onMessage("friend_request_received", (data) => {
-      console.log("[Friends] Received friend request:", data);
-      utils.api.friendships.pending.get.invalidate();
-    });
+    const unsubscribeRequest = onMessage(
+      "friend_request_received",
+      async (data) => {
+        console.log("[Friends] Received friend request:", data);
+        await utils.api.friendships.pending.get.invalidate();
+      }
+    );
 
-    const unsubscribeAccept = onMessage("friend_accept", (data) => {
-      console.log("[Friends] Friend added:", data);
-      utils.api.friendships.pending.get.invalidate();
-      utils.api.friendships.get.invalidate();
-    });
+    const unsubscribeAccept = onMessage(
+      "friend_request_accepted",
+      async (data) => {
+        console.log("[Friends] Friend added:", data);
+        await utils.api.friendships.pending.get.invalidate();
+        await utils.api.friendships.get.invalidate();
+      }
+    );
 
-    const unsubscribeDecline = onMessage("friend_request_declined", (data) => {
-      console.log("[Friends] Friend request declined:", data);
-      utils.api.friendships.pending.get.invalidate();
-    });
+    const unsubscribeDecline = onMessage(
+      "friend_request_declined",
+      async (data) => {
+        console.log("[Friends] Friend request declined:", data);
+        await utils.api.friendships.pending.get.invalidate();
+      }
+    );
 
-    const unsubscribeRemove = onMessage("friend_removed", (data) => {
+    const unsubscribeRemove = onMessage("friend_removed", async (data) => {
       console.log("[Friends] Received friend_removed event");
-      utils.api.friendships.get.invalidate();
+      await utils.api.friendships.get.invalidate();
     });
 
     return () => {
@@ -51,20 +61,14 @@ export const useFriends = () => {
   }, [onMessage, utils]);
 
   const sendRequestMutation = eden.api.friendships.post.useMutation({
-    onSuccess: (data) => {
-      utils.api.friendships.pending.get.setData(undefined, (old) => {
-        if (!old) return old;
-        return {
-          ...old,
-          outgoingRequests: [...(old || []), data],
-        };
-      });
+    onSuccess: async (data) => {
+      await utils.api.friendships.pending.get.invalidate();
       toast({
         title: "Friend request sent!",
         description: "You can now wait for the user to accept your request.",
       });
 
-      sendMessage({
+      await sendMessage({
         op: Opcodes.FriendRequest,
         d: {
           to_user_id: data?.addresseeId,
@@ -83,17 +87,17 @@ export const useFriends = () => {
 
   const acceptFriendRequestMutation =
     eden.api.friendships.accept.patch.useMutation({
-      onSuccess: (data) => {
-        utils.api.friendships.pending.get.invalidate();
-        utils.api.friendships.get.invalidate();
-        utils.api.conversations.get.invalidate();
+      onSuccess: async (data) => {
+        await utils.api.friendships.pending.get.invalidate();
+        await utils.api.friendships.get.invalidate();
+        await utils.api.conversations.get.invalidate();
 
         toast({
           title: "Friend request accepted!",
           description: "You are now friends with the user.",
         });
 
-        sendMessage({
+        await sendMessage({
           op: Opcodes.FriendAccept,
           d: {
             to_user_id: data?.friendship.requesterId,
@@ -106,16 +110,16 @@ export const useFriends = () => {
 
   const declineFriendRequestMutation =
     eden.api.friendships.decline.patch.useMutation({
-      onSuccess: (data) => {
-        utils.api.friendships.pending.get.invalidate();
-        utils.api.friendships.get.invalidate();
+      onSuccess: async (data) => {
+        await utils.api.friendships.pending.get.invalidate();
+        await utils.api.friendships.get.invalidate();
 
         toast({
           title: "Friend request declined!",
           description: "You will no longer receive updates from this user.",
         });
 
-        sendMessage({
+        await sendMessage({
           op: Opcodes.FriendDecline,
           d: {
             to_user_id: data?.requesterId,
@@ -127,7 +131,7 @@ export const useFriends = () => {
     });
 
   const removeFriendMutation = eden.api.friendships.delete.useMutation({
-    onSuccess: (data, variables) => {
+    onSuccess: async (data, variables) => {
       console.log("[Friends] Removing friend. FriendshipId:", data.id);
 
       // Find the friend's user ID from the friends list
@@ -139,7 +143,7 @@ export const useFriends = () => {
 
       console.log("[Friends] Found friend data:", friend);
 
-      utils.api.friendships.get.invalidate();
+      await utils.api.friendships.get.invalidate();
 
       toast({
         title: "Friend removed!",
@@ -155,7 +159,7 @@ export const useFriends = () => {
       };
 
       console.log("[Friends] Sending WebSocket message:", message);
-      sendMessage(message);
+      await sendMessage(message);
     },
   });
 

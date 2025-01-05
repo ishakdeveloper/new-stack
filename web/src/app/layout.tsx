@@ -30,7 +30,7 @@ export default async function RootLayout({
       <body className="">
         <QueryProvider>
           <SocketProvider session={session?.data}>
-            <VoiceProvider session={session?.data}>
+            <VoiceProvider>
               <ThemeProvider
                 attribute="class"
                 defaultTheme="system"

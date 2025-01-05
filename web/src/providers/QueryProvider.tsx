@@ -1,16 +1,9 @@
 "use client";
 
-import { EdenClient, httpBatchLink, httpLink } from "@ap0nia/eden-react-query";
-import {
-  QueryClient,
-  QueryClientProvider,
-  HydrationBoundary,
-  dehydrate,
-} from "@tanstack/react-query";
-import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
+import { httpBatchLink, httpLink } from "@ap0nia/eden-react-query";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { eden } from "@web/utils/client";
 import { PropsWithChildren, useState } from "react";
-import type { App } from "@server";
 import SuperJSON from "superjson";
 
 export default function QueryProvider({ children }: PropsWithChildren) {
@@ -30,8 +23,9 @@ export default function QueryProvider({ children }: PropsWithChildren) {
     eden.createClient({
       links: [
         // @ts-ignore
-        httpLink({
+        httpBatchLink({
           domain: "http://localhost:4000",
+          transformer: SuperJSON,
         }),
       ],
     })

@@ -14,7 +14,7 @@ import { ScrollArea } from "@web/components/ui/scroll-area";
 import { Badge } from "@web/components/ui/badge";
 import { Avatar, AvatarImage, AvatarFallback } from "@web/components/ui/avatar";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { client } from "@web/utils/client";
+import { client, eden } from "@web/utils/client";
 import { authClient } from "@web/utils/authClient";
 import { Icons } from "@web/components/ui/icons";
 import { useSocket } from "@web/providers/SocketProvider";
@@ -41,13 +41,14 @@ export function SelectGroupMembers({
   const session = authClient.useSession();
   const queryClient = useQueryClient();
   const { sendMessage } = useSocket();
-  const { data: friends } = useQuery({
-    queryKey: ["friends", session.data?.user.id],
-    queryFn: async () => {
-      const friends = await client.api.friendships.get();
-      return friends.data;
-    },
-  });
+  const { data: friends } = eden.api.friendships.get.useQuery();
+  // const { data: friends } = useQuery({
+  //   queryKey: ["friends", session.data?.user.id],
+  //   queryFn: async () => {
+  //     const friends = await client.api.friendships.get();
+  //     return friends.data;
+  //   },
+  // });
 
   const createGroupMutation = useMutation({
     mutationFn: async () => {

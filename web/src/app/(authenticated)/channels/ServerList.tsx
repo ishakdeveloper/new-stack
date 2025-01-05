@@ -13,7 +13,7 @@ import React, { useEffect } from "react";
 import Link from "next/link";
 import { Separator } from "@web/components/ui/separator";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { client } from "@web/utils/client";
+import { client, eden } from "@web/utils/client";
 import { useGuildStore } from "@web/stores/useGuildStore";
 import { useRouter } from "next/navigation";
 import { CreateGuildModal } from "./CreateGuildModal";
@@ -24,7 +24,8 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
 } from "@web/components/ui/context-menu";
-import { Opcodes, useSocket } from "@web/providers/SocketProvider";
+import { useSocket } from "@web/providers/SocketProvider";
+import { Opcodes } from "@repo/api";
 import { useChatStore } from "@web/stores/useChatStore";
 
 export default function ServerList() {
@@ -42,13 +43,15 @@ export default function ServerList() {
   const currentChatId = useChatStore((state) => state.currentChatId);
 
   const router = useRouter();
-  const { data: guilds, isLoading } = useQuery({
-    queryKey: ["guilds", currentUser?.id],
-    queryFn: async () => {
-      const res = await client.api.guilds.get();
-      return res.data;
-    },
-  });
+  const { data: guilds, isLoading } = eden.api.guilds.get.useQuery();
+
+  // const { data: guilds, isLoading } = useQuery({
+  //   queryKey: ["guilds", currentUser?.id],
+  //   queryFn: async () => {
+  //     const res = await client.api.guilds.get();
+  //     return res.data;
+  //   },
+  // });
 
   const socket = useSocket();
 

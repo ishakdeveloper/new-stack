@@ -6,6 +6,7 @@ import {
   ContextMenuContent,
   ContextMenuTrigger,
 } from "@web/components/ui/context-menu";
+import { eden, InferOutput } from "@web/utils/client";
 
 interface Friend {
   id: string;
@@ -17,7 +18,7 @@ interface Friend {
 }
 
 interface FriendsGridProps {
-  friends?: Friend[];
+  friends?: InferOutput["api"]["friendships"]["get"];
   onOpenConversation: (conversationId: string, friendId: string) => void;
   onRemoveFriend: (variables: { id: string }) => Promise<any>;
 }

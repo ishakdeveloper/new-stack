@@ -18,14 +18,10 @@ import { cn } from "@web/lib/utils";
 import { SelectGroupMembers } from "./SelectGroupMembers";
 import { useSocket } from "@web/providers/SocketProvider";
 import { useToast } from "@web/hooks/use-toast";
-import { Opcodes } from "@web/providers/SocketProvider";
+import { Opcodes } from "@repo/api";
 const ConversationSidebar = () => {
   const session = authClient.useSession();
-  const {
-    lastMessage,
-    onMessage,
-    sendMessage: sendSocketMessage,
-  } = useSocket();
+  const { onMessage, sendMessage: sendSocketMessage } = useSocket();
   const queryClient = useQueryClient();
   // const { data: conversations } = useQuery({
   //   queryKey: ["conversations", session.data?.user?.id],

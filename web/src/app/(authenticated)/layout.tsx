@@ -12,15 +12,5 @@ export default async function UnauthenticatedLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const session = await authClient.getSession({
-    fetchOptions: {
-      headers: await headers(),
-    },
-  });
-
-  if (!session?.data?.session) {
-    redirect("/login");
-  }
-
-  return <>{session.data ? <>{children}</> : <LoadingScreen />}</>;
+  return <>{children}</>;
 }

@@ -17,7 +17,8 @@ import { Separator } from "@web/components/ui/separator";
 import { Icons } from "@web/components/ui/icons";
 import { authClient } from "@web/utils/authClient";
 import { useUserStore } from "@web/stores/useUserStore";
-import { Opcodes, useSocket } from "@web/providers/SocketProvider";
+import { useSocket } from "@web/providers/SocketProvider";
+import { Opcodes } from "@repo/api";
 
 type FormData = {
   email: string;

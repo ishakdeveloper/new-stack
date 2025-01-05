@@ -14,6 +14,7 @@ import { guildMessageChannelRoutes } from "@server/modules/messages/messages";
 import { staticPlugin } from "@elysiajs/static";
 import { edenPlugin } from "@ap0nia/eden-react-query/server";
 import SuperJSON from "superjson";
+export * from "./lib/auth";
 
 const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(",") || [];
 
@@ -36,7 +37,7 @@ const validateOrigin = (request: Request) => {
 };
 
 const app = new Elysia()
-  .use(edenPlugin({ batch: false }) as any as Elysia)
+  .use(edenPlugin({ batch: true, transformer: SuperJSON }) as any as Elysia)
   .use(
     cors({
       origin: validateOrigin,

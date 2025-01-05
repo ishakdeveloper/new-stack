@@ -6,9 +6,10 @@ import { ScrollArea } from "@web/components/ui/scroll-area";
 import { Hash } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState, useRef, useEffect } from "react";
-import { Opcodes, useSocket } from "@web/providers/SocketProvider";
+import { useSocket } from "@web/providers/SocketProvider";
 import { useUserStore } from "@web/stores/useUserStore";
 import { MessageItem } from "./MessageItem";
+import { Opcodes } from "@repo/api";
 
 interface ChannelChatAreaProps {
   header: React.ReactNode;

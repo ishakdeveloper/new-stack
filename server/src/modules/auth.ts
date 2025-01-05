@@ -1,12 +1,6 @@
 import Elysia, { t } from "elysia";
 import { auth } from "../lib/auth";
 import { userMiddleware } from "../middlewares/userMiddleware";
-import { rabbitMQ } from "@/lib/rabbitmq";
-
-const responseSchema = t.Object({
-  session: t.Array(t.Object({})),
-  user: t.Array(t.Object({})),
-});
 
 export const authRoutes = new Elysia()
   .derive((context) => userMiddleware(context))
